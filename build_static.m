@@ -38,6 +38,25 @@ if options==1
     clear Ftag;
 elseif options==2
     % Output detailed dead-time information
+    Dtag = dlist(find((dlist>=2684354560)&(dlist<3221225472)));
+    fprintf('Total Dead-time marks: %s\r',num2str(length(Dtag)));
+    DeadTime = zeros(length(Dtag));
+    D=1;
+    LostEvents=0;
+    for i=1:length(dlist)
+        if (dlist(i)>=2684354560)&&(dlist(i)<3221225472)
+            DeadTime(D)=dlist(i);
+            D=D+1;
+            binaryTag=num2str(dec2bin(dlist(i)));
+            blocknum=bin2dec(binaryTag(4:13));
+            singles=bin2dec(binaryTag(14:32));
+            if blocknum==896||blocknum==768
+                LostEvents=LostEvents+singles;
+            end
+            fprintf('Block %u %u: %s\r', blocknum, singles, binaryTag);
+        end
+    end
+    fprintf('Total number of lost events: %u\r', LostEvents);
 else
     % Create Sinograms
     % Matrix ops-------------------------------------------------------
