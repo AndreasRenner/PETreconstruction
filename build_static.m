@@ -1,4 +1,4 @@
-function build_sino_static(filename,Ncs,options)
+function build_sino_static(filename, options)
 
 NRAD=336;                % Number of radial bins
 NANG=336;                % Number of projections
@@ -7,9 +7,20 @@ Nsinos=559;              % Number of 3D sinogram planes
 paso_t      =   0.001;
 sino_dims   =   [NRAD,NANG,Nsinos];
 
+% Choose the file from an UI
+%[filename, path]=uigetfile('*.*');
+%cd(path);
+% Get the Number of Counts (Ncs) from the size of the file
+cd('/home/andreas/data/PET_raw_data_20160603');
+filesize=dir(filename);
+Ncs=ceil(filesize.bytes/4);
+fprintf('Number of Counts: %s\r', num2str(Ncs));
+
 fid=fopen(filename,'r');
 dlist=fread(fid,[Ncs],'uint32');    
 fclose(fid);
+cd('/home/andreas/code/PETreconstruction');
+
 
 if options==1
     % Output prompts per second
@@ -97,8 +108,8 @@ else
     Nevnts=length(ptag)+length(rtag)+length(Ttag)+length(Dtag)+length(Ftag);
     fprintf('ACQ time [s]\t:\t%s\r',num2str(time));
     fprintf('Total events\t:\t%s\r\n',num2str(Nevnts));
-    if(Nevnts~=Ncs);
-        fprintf('CAUTION! Numer of "Total events" is not = to "Ncs"!\n');
+    if(Nevnts<Ncs);
+        fprintf('Numer of "Total events" is smaller than "Ncs"!\n');
     end
 end
 
