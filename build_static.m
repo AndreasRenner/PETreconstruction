@@ -24,6 +24,7 @@ cd('/home/andreas/code/PETreconstruction');
 
 if options==1
     % Output prompts per second
+    % -------------------------------------------------------
     ptag=[];
     Ttag=[];
     Ftag=[];
@@ -47,6 +48,7 @@ if options==1
     clear Ftag;
 elseif options==2
     % Output detailed dead-time information
+    % -------------------------------------------------------
     Dtag = dlist(find((dlist>=2684354560)&(dlist<3221225472)));
     fprintf('Total Dead-time marks: %s\r',num2str(length(Dtag)));
     DeadTime = zeros(length(Dtag));
@@ -69,9 +71,9 @@ elseif options==2
         end
     end
     fprintf('Total number of lost events: %u\r', LostEvents);
-else
-    % Create Sinograms
-    % Matrix ops-------------------------------------------------------
+elseif options==3
+    % Create Sinograms of the whole acquisition
+    % -------------------------------------------------------
     % Prompts between [001111...1] and [01111...1]
     ptag = dlist(find((dlist<2^31)&(dlist>=2^30)));
     % Randoms lower or equal [001111...1]
@@ -112,6 +114,19 @@ else
     if(Nevnts<Ncs);
         fprintf('Numer of "Total events" is smaller than "Ncs"!\n');
     end
+else
+    % Cut the first X and the last Y ms of the acquisition
+    % and create Sinograms of the rest
+    % -------------------------------------------------------
+    % Read values for X and Y
+    x=1;
+    y=20000;
+    
+    % Convert time in [ms] to the format of a Ttag
+    posx = find(dlist==(x+2^31));
+    posy = find(dlist==(y+2^31));
+    fprintf('posx = %s\r', num2str(posx));
+    fprintf('posy = %s\r', num2str(posy));
 end
 
 clear dlist
