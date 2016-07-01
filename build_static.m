@@ -42,8 +42,6 @@ if options==1
                 tmplen=length(ptag);
             end
             T=T+1;
-        else
-            Ftag(F)=dlist(i);
         end
     end
     clear Ftag;
@@ -55,7 +53,10 @@ elseif options==2
     D=1;
     LostEvents=0;
     for i=1:length(dlist)
-        if (dlist(i)>=2684354560)&&(dlist(i)<3221225472)
+        if (dlist(i)>=(2^31))&&(dlist(i)<2684354560)
+            Ttag=dlist(i);
+            Ttag=num2str(Ttag-2^31);
+        elseif (dlist(i)>=2684354560)&&(dlist(i)<3221225472)
             DeadTime(D)=dlist(i);
             D=D+1;
             binaryTag=num2str(dec2bin(dlist(i)));
@@ -64,7 +65,7 @@ elseif options==2
             if blocknum==896||blocknum==768
                 LostEvents=LostEvents+singles;
             end
-            fprintf('Block %u %u: %s\r', blocknum, singles, binaryTag);
+            fprintf('Block: %u \tEvents: %u \t Time[ms]: %s\r', blocknum, singles, Ttag);
         end
     end
     fprintf('Total number of lost events: %u\r', LostEvents);
