@@ -4,8 +4,8 @@ NRAD=336;                % Number of radial bins
 NANG=336;                % Number of projections
 Nsinos=559;              % Number of 3D sinogram planes
 
-paso_t      =   0.001;
-sino_dims   =   [NRAD,NANG,Nsinos];
+paso_t=0.001;
+sinoDim=NRAD*NANG*Nsinos;
 
 % Choose the file from an UI
 %[filename, path]=uigetfile('*.*');
@@ -22,15 +22,13 @@ fclose(fid);
 cd('/home/andreas/code/PETreconstruction');
 
 
+% -------------------------------------------------------
+% Option 1: Output prompts per second
 if options==1
-    % Output prompts per second
-    % -------------------------------------------------------
     ptag=[];
     Ttag=[];
-    Ftag=[];
     p=1;
     T=1;
-    F=1;
     tmplen=0;
     for i=1:length(dlist)
         if (dlist(i)<(2^31))&&(dlist(i)>=(2^30))
@@ -39,19 +37,18 @@ if options==1
         elseif (dlist(i)>=(2^31))&&(dlist(i)<2684354560)
             Ttag(T)=dlist(i);
             if mod(Ttag(T)-(2^31),1000)==0
-                fprintf('Prompts in s %s: %u\r', num2str((T-1)/1000), (length(ptag)-tmplen));
+                fprintf('Prompts in s %u: %u\r', (T-1)/1000, (length(ptag)-tmplen));
                 tmplen=length(ptag);
             end
             T=T+1;
         end
     end
-    clear Ftag;
+    
+% -------------------------------------------------------
+% Option 2: Output detailed dead-time information
 elseif options==2
-    % Output detailed dead-time information
-    % -------------------------------------------------------
-    Dtag = dlist(find((dlist>=2684354560)&(dlist<3221225472)));
-    fprintf('Total Dead-time marks: %s\r',num2str(length(Dtag)));
-    DeadTime = zeros(length(Dtag));
+    Dtag=dlist(find((dlist>=2684354560)&(dlist<3221225472)));
+    DeadTime=zeros(length(Dtag));
     D=1;
     LostEvents=0;
     for i=1:length(dlist)
@@ -70,10 +67,12 @@ elseif options==2
             fprintf('Block: %u \tEvents: %u \t Time[ms]: %s\r', blocknum, singles, Ttag);
         end
     end
+    fprintf('Total Dead-time marks: %s\r',num2str(length(Dtag)));
     fprintf('Total number of lost events: %u\r', LostEvents);
+    
+% -------------------------------------------------------
+% Option 3: Create Sinograms of the whole acquisition
 elseif options==3
-    % Create Sinograms of the whole acquisition
-    % -------------------------------------------------------
     % Prompts between [001111...1] and [01111...1]
     ptag = dlist(find((dlist<2^31)&(dlist>=2^30)));
     % Randoms lower or equal [001111...1]
@@ -81,19 +80,19 @@ elseif options==3
 
     % TAGs (Time marks, dead-time tracking, fisio marks)
     Ttag = dlist(find((dlist>=2^31)&(dlist<2684354560)));
-    Dtag = dlist(find((dlist>=2684354560)&(dlist<3221225472))); %>=101 00...0 <110 00...0
-    Ftag = dlist(find((dlist>=3758096384)&(dlist<3825205248))); %>=111 00...0 <1110 0100 00...0
+    Dtag = dlist(find((dlist>=2684354560)&(dlist<3221225472))); %>=101 0..0 <110 0..0
+    Ftag = dlist(find((dlist>=3758096384)&(dlist<3825205248))); %>=111 0..0 <1110 010..0
 
     % remove preceding tag if necessary
     ptag = ptag-(2^30);
     %Ttag = Ttag-(2^31);   % returns time in ms
     %find(~mod(Ttag, 1000))     % returns time in s
     % clear out-of-sinograms indices
-    ptag = ptag((ptag<=prod(sino_dims))&(ptag>0));
-    rtag = rtag((rtag<=prod(sino_dims))&(rtag>0));    
+    ptag = ptag((ptag<=sinoDim)&(ptag>0));
+    rtag = rtag((rtag<=sinoDim)&(rtag>0));    
 
     % build sinograms
-    sino=accumarray(ptag,1,[NRAD*NANG*Nsinos,1])-accumarray(rtag,1,[NRAD*NANG*Nsinos,1]);
+    sino=accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
 
     fid=fopen('sinogram_static.raw','w');
     fwrite(fid,uint16(sino),'uint16');
@@ -102,31 +101,69 @@ elseif options==3
     % Output for user
     fprintf('Finished reading list file\r\n');
     fprintf('Prompts\t\t:\t%s\r',num2str(length(ptag)));
-    fprintf('Randoms\t\t:\t%s\r',num2str(length(rtag)));   
-    fprintf('\r');
-    fprintf('Time marks\t:\t%s\r',num2str(length(Ttag)));
-    fprintf('Dead-time marks\t:\t%s\r',num2str(length(Dtag)));    
-    %fprintf('Fisio marks\t:\t%s\r\n',num2str(length(Ftag)));   
+    fprintf('Randoms\t\t:\t%s\r',num2str(length(rtag)));  
     time=length(Ttag)*paso_t;
-    Nevnts=length(ptag)+length(rtag)+length(Ttag)+length(Dtag)+length(Ftag);
+    Ntags=length(ptag)+length(rtag)+length(Ttag)+length(Dtag)+length(Ftag);
     fprintf('ACQ time [s]\t:\t%s\r',num2str(time));
-    fprintf('Total events\t:\t%s\r\n',num2str(Nevnts));
-    if(Nevnts<Ncs);
-        fprintf('Numer of "Total events" is smaller than "Ncs"!\n');
+    fprintf('Total Number of Tags \t:\t%s\r\n',num2str(Ntags));
+    if(Ntags<Ncs);
+        fprintf('Total number of Tags is smaller than "Ncs"!\n');
     end
-else
-    % Cut the first X and the last Y ms of the acquisition
-    % and create Sinograms of the rest
-    % -------------------------------------------------------
-    % Read values for X and Y
-    x=1;
-    y=20000;
     
-    % Convert time in [ms] to the format of a Ttag
+% -------------------------------------------------------
+% Option 4: Cut the first X and the last Y ms of the acquisition
+% and create Sinograms of the remaining events
+else
+    % Read values for X and Y
+    x=10000;
+    y=11000;
+    
+    % Convert time in [ms] to the format of a Ttag and search for
+    % the corresponding position of the Ttag in dlist 
     posx = find(dlist==(x+2^31));
     posy = find(dlist==(y+2^31));
-    fprintf('posx = %s\r', num2str(posx));
-    fprintf('posy = %s\r', num2str(posy));
+    fprintf('posx in dlist = %s\r', num2str(posx));
+    fprintf('posy in dlist= %s\r', num2str(posy));
+    
+    % Create the cut data list
+    cutdlist = dlist(posx:posy);
+    
+    % Prompts between [001111...1] and [01111...1]
+    ptag = cutdlist(find((cutdlist<2^31)&(cutdlist>=2^30)));
+    % Randoms lower or equal [001111...1]
+    rtag = cutdlist(find((cutdlist<2^30)));
+
+    % TAGs (Time marks, dead-time tracking, fisio marks)
+    Ttag = cutdlist(find((cutdlist>=2^31)&(cutdlist<2684354560)));
+    Dtag = cutdlist(find((cutdlist>=2684354560)&(cutdlist<3221225472)));
+    Ftag = cutdlist(find((cutdlist>=3758096384)&(cutdlist<3825205248)));
+
+    % remove preceding tag - necessary for ptag only, as the preceding
+    % tag of rtag is already 0
+    ptag = ptag-(2^30);
+    % clear out-of-sinogram indices
+    % -> bin-address of event packet has to be between 0 and sinoDim
+    ptag = ptag((ptag<=sinoDim)&(ptag>0));
+    rtag = rtag((rtag<=sinoDim)&(rtag>0));    
+
+    % build sinograms
+    sino=accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
+
+    fid=fopen('sinogram_static_cut.raw','w');
+    fwrite(fid,uint16(sino),'uint16');
+    fclose(fid);
+
+    % Output for user
+    fprintf('Finished reading list file\r\n');
+    fprintf('Prompts\t\t:\t%s\r',num2str(length(ptag)));
+    fprintf('Randoms\t\t:\t%s\r',num2str(length(rtag)));  
+    time=length(Ttag)*paso_t;
+    Ntags=length(ptag)+length(rtag)+length(Ttag)+length(Dtag)+length(Ftag);
+    fprintf('ACQ time [s]\t:\t%s\r',num2str(time));
+    fprintf('Total Number of Tags \t:\t%s\r\n',num2str(Ntags));
+    if(Ntags<Ncs);
+        fprintf('Total number of Tags is smaller than "Ncs"!\n');
+    end
 end
 
 clear dlist
