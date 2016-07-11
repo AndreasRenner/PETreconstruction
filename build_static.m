@@ -115,15 +115,15 @@ elseif options==3
 % and create Sinograms of the remaining events
 else
     % Read values for X and Y
-    x=10000;
-    y=11000;
+    promptx='Enter time in ms you want to cut at the beginning:';
+    prompty='Enter time in ms you want to cut at the end:';
+    x=input(promptx);
+    y=input(prompty);
     
     % Convert time in [ms] to the format of a Ttag and search for
     % the corresponding position of the Ttag in dlist 
     posx = find(dlist==(x+2^31));
     posy = find(dlist==(y+2^31));
-    fprintf('posx in dlist = %s\r', num2str(posx));
-    fprintf('posy in dlist= %s\r', num2str(posy));
     
     % Create the cut data list
     cutdlist = dlist(posx:posy);
@@ -161,6 +161,24 @@ else
     Ntags=length(ptag)+length(rtag)+length(Ttag)+length(Dtag)+length(Ftag);
     fprintf('ACQ time [s]\t:\t%s\r',num2str(time));
     fprintf('Total Number of Tags \t:\t%s\r\n',num2str(Ntags));
+    % Output lost events
+    DeadTime=zeros(length(Dtag));
+    D=1;
+    LostEvents=0;
+    for i=1:length(cutdlist)
+        if (cutdlist(i)>=2684354560)&&(cutdlist(i)<3221225472)
+            DeadTime(D)=cutdlist(i);
+            D=D+1;
+            binaryTag=num2str(dec2bin(cutdlist(i)));
+            blocknum=bin2dec(binaryTag(4:13));
+            singles=bin2dec(binaryTag(14:32));
+            if blocknum==896||blocknum==768
+                LostEvents=LostEvents+singles;
+            end
+        end
+    end
+    fprintf('Total number of lost events: %u\r\n', LostEvents);
+    
     if(Ntags<Ncs);
         fprintf('Total number of Tags is smaller than "Ncs"!\n');
     end
