@@ -14,7 +14,7 @@ sinoDim=NRAD*NANG*Nsinos;
 cd('/home/andreas/data/PET_raw_data_20160603');
 filesize=dir(filename);
 Ncs=ceil(filesize.bytes/4);
-fprintf('Number of Counts: %s\r', num2str(Ncs));
+fprintf('Estimated Number of Tags: %s\r', num2str(Ncs));
 
 fid=fopen(filename,'r');
 dlist=fread(fid,[Ncs],'uint32');    
@@ -93,8 +93,10 @@ elseif options==3
 
     % build sinograms
     sino=accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
-
-    fid=fopen('sinogram_static.raw','w');
+    
+    % write sinograms to file
+    sinogramname = strcat('sinogram_static_', filename, '.raw');
+    fid=fopen(sinogramname,'w');
     fwrite(fid,uint16(sino),'uint16');
     fclose(fid);
 
@@ -107,7 +109,8 @@ elseif options==3
     fprintf('ACQ time [s]\t:\t%s\r',num2str(time));
     fprintf('Total Number of Tags \t:\t%s\r\n',num2str(Ntags));
     if(Ntags<Ncs);
-        fprintf('Total number of Tags is smaller than "Ncs"!\n');
+        %fprintf('Total number of Tags is smaller than "Ncs"!\n');
+        fprintf('All Tags of the file were considered!\n');
     end
     
 % -------------------------------------------------------
@@ -149,7 +152,9 @@ else
     % build sinograms
     sino=accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
 
-    fid=fopen('sinogram_static_cut.raw','w');
+    % write sinograms to file
+    sinogramname = strcat('sinogram_static_', filename, '_cut.raw');
+    fid=fopen(sinogramname,'w');
     fwrite(fid,uint16(sino),'uint16');
     fclose(fid);
 
@@ -180,7 +185,8 @@ else
     fprintf('Total number of lost events: %u\r\n', LostEvents);
     
     if(Ntags<Ncs);
-        fprintf('Total number of Tags is smaller than "Ncs"!\n');
+        %fprintf('Total number of Tags is smaller than "Ncs"!\n');
+        fprintf('All Tags of the file were considered!\n');
     end
 end
 
