@@ -11,7 +11,7 @@ sinoDim=NRAD*NANG*Nsinos;
 %[filename, path]=uigetfile('*.*');
 %cd(path);
 % Get the Number of Counts (Ncs) from the size of the file
-cd('/home/andreas/data/PET_raw_data_20160603');
+%cd('/home/andreas/data/PET_raw_data_20160603');
 filesize=dir(filename);
 Ncs=ceil(filesize.bytes/4);
 fprintf('Estimated Number of Tags: %s\r', num2str(Ncs));
@@ -19,8 +19,10 @@ fprintf('Estimated Number of Tags: %s\r', num2str(Ncs));
 fid=fopen(filename,'r');
 dlist=fread(fid,[Ncs],'uint32');    
 fclose(fid);
-cd('/home/andreas/code/PETreconstruction');
-
+%cd('/home/andreas/code/PETreconstruction');
+%LMwordcount=487595518;
+%header=Ncs-LMwordcount;
+%disp(header);
 
 % -------------------------------------------------------
 % Option 1: Output prompts per second
@@ -59,6 +61,7 @@ elseif options==2
             DeadTime(D)=dlist(i);
             D=D+1;
             binaryTag=num2str(dec2bin(dlist(i)));
+            %disp(binaryTag);
             blocknum=bin2dec(binaryTag(4:13));
             singles=bin2dec(binaryTag(14:32));
             if blocknum==896||blocknum==768
