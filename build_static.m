@@ -19,28 +19,21 @@ fprintf('Estimated Number of Tags: %s\r', num2str(Ncs));
 fid=fopen(filename,'r');
 dlist=fread(fid,[Ncs],'uint32');    
 fclose(fid);
-%cd('/home/andreas/code/PETreconstruction');
-%LMwordcount=487595518;
-%header=Ncs-LMwordcount;
-%disp(header);
 
 % -------------------------------------------------------
 % Option 1: Output prompts per second
 if options==1
-    ptag=[];
-    Ttag=[];
-    p=1;
-    T=1;
+    p=0;
+    T=0;
     tmplen=0;
     for i=1:length(dlist)
         if (dlist(i)<(2^31))&&(dlist(i)>=(2^30))
-            ptag(p)=dlist(i);
             p=p+1;
         elseif (dlist(i)>=(2^31))&&(dlist(i)<2684354560)
-            Ttag(T)=dlist(i);
-            if mod(Ttag(T)-(2^31),1000)==0
-                fprintf('Prompts in s %u: %u\r', (T-1)/1000, (length(ptag)-tmplen));
-                tmplen=length(ptag);
+            Ttag=dlist(i);
+            if mod(Ttag-(2^31),1000)==0
+                fprintf('Prompts in s %u: %u\r', T/1000, p-tmplen);
+                tmplen=p;
             end
             T=T+1;
         end
@@ -49,16 +42,13 @@ if options==1
 % -------------------------------------------------------
 % Option 2: Output detailed dead-time information
 elseif options==2
-    Dtag=dlist(find((dlist>=2684354560)&(dlist<3221225472)));
-    DeadTime=zeros(length(Dtag));
-    D=1;
+    D=0;
     LostEvents=0;
     for i=1:length(dlist)
         if (dlist(i)>=(2^31))&&(dlist(i)<2684354560)
             Ttag=dlist(i);
             Ttag=num2str(Ttag-2^31);
         elseif (dlist(i)>=2684354560)&&(dlist(i)<3221225472)
-            DeadTime(D)=dlist(i);
             D=D+1;
             binaryTag=num2str(dec2bin(dlist(i)));
             %disp(binaryTag);
@@ -70,7 +60,7 @@ elseif options==2
             fprintf('Block: %u \tEvents: %u \t Time[ms]: %s\r', blocknum, singles, Ttag);
         end
     end
-    fprintf('Total Dead-time marks: %s\r',num2str(length(Dtag)));
+    fprintf('Total Dead-time marks: %s\r',num2str(D));
     fprintf('Total number of lost events: %u\r', LostEvents);
     
 % -------------------------------------------------------
@@ -170,12 +160,10 @@ else
     fprintf('ACQ time [s]\t:\t%s\r',num2str(time));
     fprintf('Total Number of Tags \t:\t%s\r\n',num2str(Ntags));
     % Output lost events
-    DeadTime=zeros(length(Dtag));
-    D=1;
+    D=0;
     LostEvents=0;
     for i=1:length(cutdlist)
         if (cutdlist(i)>=2684354560)&&(cutdlist(i)<3221225472)
-            DeadTime(D)=cutdlist(i);
             D=D+1;
             binaryTag=num2str(dec2bin(cutdlist(i)));
             blocknum=bin2dec(binaryTag(4:13));
