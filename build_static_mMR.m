@@ -120,21 +120,22 @@ elseif options==2
                 loss=bin2dec(binaryTag(13:32));
                 LostEventsFirstLossyNode=LostEventsFirstLossyNode+loss;
                 millionEvents=millionEvents+1;
-                fprintf('1. Lossy Node: %u \t lost events at %s [ms]\r', loss, Ttag);
+                fprintf('1. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
             elseif typefield==6
                 loss=bin2dec(binaryTag(13:32));
                 LostEventsSecondLossyNode=LostEventsSecondLossyNode+loss;
                 millionEvents=millionEvents+1;
-                fprintf('2. Lossy Node: %u \t lost events at %s [ms]\r', loss, Ttag);
+                fprintf('2. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
             %else
                 %blocknum=bin2dec(binaryTag(4:13));
                 %singles=bin2dec(binaryTag(14:32));
-                %fprintf('Block: %u \tEvents: %u \t Time[ms]: %s\r', blocknum, singles, Ttag);
+                %fprintf('Block: %u\tSingles: %u\t Time[ms]: %s\r',blocknum,singles,Ttag);
             end
         end
     end
     totalLoss=LostEventsSecondLossyNode+LostEventsFirstLossyNode;
-    totalEvents=(millionEvents-1)*1000000;%1048575;
+    totalEvents=millionEvents*1048575;
+    % 1048575 corresponds to the 20 bit ,,lost event tally field''
     fprintf('Total Dead-time marks: %u\r',D);
     fprintf('Number of lost events inserted by the "1. Lossy Node": %u\r', LostEventsFirstLossyNode);
     fprintf('Number of lost events inserted by the "2. Lossy Node": %u\r', LostEventsSecondLossyNode);
