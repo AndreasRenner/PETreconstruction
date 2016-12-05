@@ -1,13 +1,15 @@
 function evaluateDeadTime()
 
 numberFiles = 30;
-results = zeros(30,9);
+results     = zeros(30,16);
 % Description of Matrix Layout
-% 1   -2       -3      -4      -5      -6      -7    -8   -9
-% Time-Activity-A_Trans-A_Emiss-Prompts-Randoms-Trues-Lost-Total Events
+% 1   -2       -3      -4      -5      -6      -7    -8        -9
+% Time-Activity-A_Trans-A_Emiss-Prompts-Randoms-Trues-LostTally-TotalEvents
+% 10         -11        -12       -13      -14         -15         -16
+% CorPrompts -CorDelays -CorTrues -CorLost -LostEvents -RelCorLost -RelLost
 
 %_____________________________________________________
-% Time (= Start-Time from DICOM Header + 30 s)
+% (1) Time (= Start-Time from DICOM Header + 30 s)
 % Start-Time is the time in seconds since 14:00
 results(:,1)=[1567,1709,1929,2123,2327,2561, ...
               2746,2905,3065,3242,3435,3601, ...
@@ -30,25 +32,27 @@ initTimeS(2)   = 1196;     % Time of initA in [s] since 14:00 PET/MR time
 %syringe3
 initAsyringe(3)= 187.2;    % initial Activity of syringe3 in [MBq]
 initTimeS(3)   = 1353;     % Time of initA in [s] since 14:00 PET/MR time
-%decay law
-% A(t) = A0 * 2^(-t/halflife)
-%A_Emiss -> Activity of the bottle
-for i=1:30
+%decay law: A(t) = A0 * 2^(-t/halflife)
+
+% (4) A_Emiss -> Activity of the bottle
+for i=1:numberFiles
     results(i,4) = initAbottle*2^(-((results(i,1)-initTimeB)/halflifeFDG));
 end
-%A_Trans -> Activity of the respective Syringe
+
+% (3) A_Trans -> Activity of the respective Syringe
 k=1;
 for i=1:10
     for j=1:3
-        results(k,3) = initAsyringe(j)*2^(-((results(k,1)-initTimeS(j))/halflifeFDG));
+        results(k,3)=initAsyringe(j)*2^(-((results(k,1)-initTimeS(j))/halflifeFDG));
         k=k+1;
     end
 end
-%Activity-> Total activity
+
+% (2) Activity-> Total activity
 results(:,2)=results(:,3)+results(:,4);
 
 %_____________________________________________________
-% Prompts (from DICOM Header)
+% (5) Prompts (from DICOM Header)
 results(:,5)=[396305312,412100834,458169481,398664857,415292681,464853078, ...
               401556827,418385629,466884956,403966560,421306680,469308732, ...
               406802872,425118272,471728658,409480360,429192051,455295696, ...
@@ -56,7 +60,7 @@ results(:,5)=[396305312,412100834,458169481,398664857,415292681,464853078, ...
               418402903,442812119,377344940,420938831,447428825,352868298];
 
 %_____________________________________________________
-% Randoms (from DICOM Header)
+% (6) Randoms (from DICOM Header)
 results(:,6)=[287150997,269762869,232609180,283969669,265965697,226957812, ...
               280280073,262233144,221862180,277248949,258784324,216556889, ...
               274037366,255222903,211450629,270470399,251560649,198009388, ...
@@ -64,16 +68,16 @@ results(:,6)=[287150997,269762869,232609180,283969669,265965697,226957812, ...
               260293777,240906833,149211730,256735542,237219338,134660350];
 
 %_____________________________________________________
-% Net. Trues (Prompts-Randoms)
+% (7) Net. Trues (Prompts-Randoms)
 results(:,7)=results(:,5)-results(:,6);
 
 %_____________________________________________________
-% Dead-Time information (Lost Events and Total Events)
+% (8,9) Dead-Time information (Lost Events and Total Events)
 for filenum=1:numberFiles
     filename = strcat(int2str(filenum), '.IMA');
     filesize=dir(filename);
     Ncs=ceil(filesize.bytes/4);
-    fprintf('Estimated Number of Tags in file number %u: %u\r', filenum, Ncs);
+    fprintf('Estimated Number of Tags in file %u: %u\r',filenum,Ncs);
     fid=fopen(filename,'r');
     dlist=fread(fid,[Ncs],'uint32');    
     fclose(fid);
@@ -105,39 +109,129 @@ for filenum=1:numberFiles
     results(filenum,9)=millionEvents*1048575;
     
     % Output for user
-    fprintf('Lost events "1. Lossy Node": %u\r', LostEventsFirstLossyNode);
-    fprintf('Lost events "2. Lossy Node": %u\r', LostEventsSecondLossyNode);
-    fprintf('Total lost event packets: \t %u\r', results(filenum,8));
-    fprintf('Total initial events: \t %u\r\n', results(filenum,9));
+    fprintf('Lost events "1. Lossy Node": %u\r',LostEventsFirstLossyNode);
+    fprintf('Lost events "2. Lossy Node": %u\r',LostEventsSecondLossyNode);
+    fprintf('Total lost event packets: \t %u\r',results(filenum,8));
+    fprintf('Total initial events: \t %u\r\n',  results(filenum,9));
 
 end
 
-fid=fopen('results.dat','w');
+%_____________________________________________________
+% Lost event tally correction [Jones2012]
+% (10) Corrected Prompts
+for i=1:numberFiles
+    results(i,10)=results(i,5)+results(i,5)*results(i,8)/results(i,9);
+end
+
+% (11) Corrected Delays
+for i=1:numberFiles
+    results(i,11)=results(i,6)+results(i,6)*results(i,8)/results(i,9);
+end
+
+% (12) Corrected Trues
+results(:,12)=results(:,10)-results(:,11);
+
+% (13) Corrected Lost
+results(:,13)=results(:,9)-results(:,10)-results(:,11);
+
+% (14) Lost Events
+results(:,14)=results(:,9)-results(:,5)-results(:,6);
+
+% (15) Relative amount of Corrected Lost Events
+for i=1:numberFiles
+    results(i,15)=results(i,13)/results(i,9);
+end
+
+% (16) Relative amount of Lost Events
+for i=1:numberFiles
+    results(i,16)=results(i,14)/results(i,9);
+end
+
+% (17) Relative amount of Random Events
+for i=1:numberFiles
+    results(i,17)=results(i,6)/results(i,5);
+end
+
+% (18) Relative amount of Corrected Randoms
+for i=1:numberFiles
+    results(i,18)=results(i,11)/results(i,10);
+end
+
+
+fid=fopen('resultsnew.dat','w');
 fwrite(fid,results,'real*4');
 fclose(fid);
 
 sortResults = sortrows(results,2);
+
+figure();
 h = stem(sortResults(:,2), [sortResults(:,5),sortResults(:,6), ...
-    sortResults(:,7),sortResults(:,8)], ...
+    sortResults(:,7),sortResults(:,8),sortResults(:,9), ...
+    (sortResults(:,9)-sortResults(:,8)-sortResults(:,6)-sortResults(:,5)), ...
+    sortResults(:,10),sortResults(:,11),sortResults(:,12)], ...
     'filled', 'LineStyle', 'none');
-h(2).Marker = 'square';
-h(3).Marker = 'diamond';
+h(1).Marker = 'o';
+h(2).Marker = 's';
+h(3).Marker = 'd';
 h(4).Marker = '+';
-%h(5).Marker = '*';
-xlabel('Activity of Transmission Source in [MBq]');
+h(5).Marker = 'o';
+h(6).Marker = '*';
+h(7).Marker = 'x';
+h(8).Marker = 'x';
+h(9).Marker = 'x';
+h(4).Color = 'k';
+h(5).Color = 'k';
+h(6).Color = 'k';
+h(7).Color = h(1).Color;
+h(8).Color = h(2).Color;
+h(9).Color = h(3).Color;
+xlabel('Activity [MBq]');
 ylabel('Counts');
-legend('Prompts','Randoms','Trues','Lost Events', ...
+legend('Prompts','Randoms','Trues','Lost Events','Total Events', ...
+    'Other losses','Cor. Prompt','Cor. Randoms','Cor. Trues', ...
+    'Location','northwest');
+xlim([120,550]);
+
+% compare other losses with prompts/randoms/trues
+% (18) Relative amount of Corrected Randoms
+for i=1:numberFiles
+    sortResults(i,19)=(sortResults(i,5)+sortResults(i,6))*0.15;
+end
+figure();
+h = stem(sortResults(:,2), [sortResults(:,5),sortResults(:,6),sortResults(:,7), ...
+    (sortResults(:,9)-sortResults(:,8)-sortResults(:,6)-sortResults(:,5)), ...
+    sortResults(:,19)],'filled', 'LineStyle', 'none');
+xlabel('Activity [MBq]');
+ylabel('Counts');
+legend('Prompts','Randoms','Trues','Other losses','Total Events*0.15', ...
+    'Location','northeast');
+xlim([120,550]);
+ylim([0,800000000])
+
+% show results vs. corrected results for prompt/random/true
+figure();
+k = stem(sortResults(:,2), [sortResults(:,5),sortResults(:,6),sortResults(:,7), ...
+    sortResults(:,10),sortResults(:,11),sortResults(:,12)], ...
+    'filled', 'LineStyle', 'none');
+k(1).Marker = 'square';
+k(2).Marker = 'square';
+k(3).Marker = 'square';
+k(4).Marker = '+';
+k(5).Marker = '+';
+k(6).Marker = '+';
+k(4).Color = k(1).Color;
+k(5).Color = k(2).Color;
+k(6).Color = k(3).Color;
+xlabel('Activity [MBq]');
+ylabel('Counts');
+legend('Prompts','Randoms','Trues','Prompts Corr','Randoms Corr','Trues Corr', ...
    'Location','northwest');
-%xlim([120,400])
+ylim([100000000,700000000])
 
 %remove Syringe1 from data
-result12=results;
-for i=1:3:28
-    result12(i,:)=0;
-end
-
-fid=fopen('totalEvents.dat','w');
-fwrite(fid,totalEvents,'real*4');
-fclose(fid);
+%result12=results;
+%for i=1:3:28
+%    result12(i,:)=0;
+%end
 
 end
