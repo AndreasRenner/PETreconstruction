@@ -126,10 +126,10 @@ elseif options==2
                 LostEventsSecondLossyNode=LostEventsSecondLossyNode+loss;
                 millionEvents=millionEvents+1;
                 fprintf('2. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
-            %else
-                %blocknum=bin2dec(binaryTag(4:13));
-                %singles=bin2dec(binaryTag(14:32));
-                %fprintf('Block: %u\tSingles: %u\t Time[ms]: %s\r',blocknum,singles,Ttag);
+            else
+                blocknum=bin2dec(binaryTag(4:13));
+                singles=bin2dec(binaryTag(14:32));
+                fprintf('Block: %u\tSingles: %u\t Time[ms]: %s\r',blocknum,singles,Ttag);
             end
         end
     end
@@ -174,7 +174,7 @@ elseif options==3
 % -------------------------------------------------------
 % Option 4: Cut the first X and the last Y ms of the acquisition
 % and create Sinograms of the remaining events
-else
+elseif options==4
     % Read values for X and Y
     promptx='Enter time in ms you want to cut at the beginning:';
     prompty='Enter time in ms you want to cut at the end:';
@@ -240,6 +240,44 @@ else
         %fprintf('Total number of Tags is smaller than "Ncs"!\n');
         fprintf('All Tags of the file were considered!\n');
     end
+    
+% -------------------------------------------------------
+% Option 5: Show block singles
+elseif options==5
+    D=0;
+    millionEvents=0;
+    BlockSingles = zeros(30,224);
+    k=1;
+    for i=1:length(dlist)
+        if (dlist(i)>=2684354560)&&(dlist(i)<3221225472)
+            % Dead-Time Tag
+            D=D+1;
+            binaryTag=num2str(dec2bin(dlist(i)));
+            typefield=bin2dec(binaryTag(4:6));
+            if typefield==7
+                millionEvents=millionEvents+1;
+            elseif typefield==6
+                millionEvents=millionEvents+1;
+            else
+                blocknum=bin2dec(binaryTag(4:13));
+                singles=bin2dec(binaryTag(14:32));
+                BlockSingles(k,blocknum+1) = singles;
+                if blocknum == 223
+                    k = k+1;
+                end
+            end
+        end
+    end
+    totalEvents=millionEvents*1048575;
+    fprintf('Total Dead-time marks: %u\r',D);
+    fprintf('Total number of initial events: \t~%u\r', totalEvents);
+    
+    figure();
+    %h = contourf(BlockSingles);
+    %h = surf(BlockSingles);
+    h = plot(BlockSingles(1,:));
+    %colormap(colorcube);
+    
 end
 
 clear dlist
