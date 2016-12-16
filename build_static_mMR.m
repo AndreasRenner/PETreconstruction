@@ -244,9 +244,10 @@ elseif options==4
 % -------------------------------------------------------
 % Option 5: Show block singles
 elseif options==5
+    time = 499;
     D=0;
     millionEvents=0;
-    BlockSingles = zeros(30,224);
+    BlockSingles = zeros(time,224);
     k=1;
     for i=1:length(dlist)
         if (dlist(i)>=2684354560)&&(dlist(i)<3221225472)
@@ -273,10 +274,40 @@ elseif options==5
     fprintf('Total number of initial events: \t~%u\r', totalEvents);
     
     figure();
-    %h = contourf(BlockSingles);
+    [C,h] = contourf(BlockSingles);
+    h.LevelStep = 2000;
     %h = surf(BlockSingles);
-    h = plot(BlockSingles(1,:));
+    %h = plot(BlockSingles(1,:));
     %colormap(colorcube);
+    
+    % DoTo: finish color-level -> should always be the same!
+    figure;
+    BlockSinglesMovie = zeros(28,8);
+    F(time) = struct('cdata',[],'colormap',[]);
+    for k=1:15
+      readPosition = 1;
+      for i=1:8
+        for j=1:28
+          BlockSinglesMovie(j,i) = BlockSingles(k,readPosition);
+          readPosition = readPosition + 1;
+        end
+      end
+      [C,g] = contourf(BlockSinglesMovie);
+      g.LevelList = [0,2000,4000,6000,8000,10000,12000,14000,16000,18000,20000];
+      %g.LevelStep = 800;
+      %g.LevelStepMode = 'manual';
+      %g.ShowText = 'on';
+      legend(strcat('Time: ',num2str(k*2),' s'),'Location','North');
+      c = colorbar;
+      c.Label.String = 'Bucket Singles Rate';
+      xlabel('Ring Number');
+      ylabel('Single Bucket Number');
+      drawnow
+      F(k) = getframe(gcf);
+    end
+    
+    fig = figure;
+    movie(fig,F,1,24)
     
 end
 
