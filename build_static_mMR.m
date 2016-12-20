@@ -244,7 +244,9 @@ elseif options==4
 % -------------------------------------------------------
 % Option 5: Show block singles
 elseif options==5
-    time = 499;
+    time = 499; %BlancScan
+    %time = 88; %TransmissionScan
+    %time = 29; %Dead-Time Scans
     D=0;
     millionEvents=0;
     BlockSingles = zeros(time,224);
@@ -269,22 +271,27 @@ elseif options==5
             end
         end
     end
+    clear dlist;
     totalEvents=millionEvents*1048575;
     fprintf('Total Dead-time marks: %u\r',D);
     fprintf('Total number of initial events: \t~%u\r', totalEvents);
     
     figure();
-    [C,h] = contourf(BlockSingles);
-    h.LevelStep = 2000;
-    %h = surf(BlockSingles);
-    %h = plot(BlockSingles(1,:));
-    %colormap(colorcube);
+    v = [0,3000,6000,9000,12000,14000,16000,17000,18000,19000,20000];
+    contourf(BlockSingles, v);
+    colormap(hot);
+    caxis([0 20000]);
+    c = colorbar;
+    c.Label.String = 'Bucket Singles Rate';
+    ylabel('Ring Number');
+    xlabel('Time [s]');
     
     % DoTo: finish color-level -> should always be the same!
     figure;
     BlockSinglesMovie = zeros(28,8);
-    F(time) = struct('cdata',[],'colormap',[]);
-    for k=1:15
+    %G(time) = struct('cdata',[],'colormap',[]);
+    G(time) = struct('cdata',[],'colormap',[]);
+    for k=1:time
       readPosition = 1;
       for i=1:8
         for j=1:28
@@ -292,24 +299,96 @@ elseif options==5
           readPosition = readPosition + 1;
         end
       end
-      [C,g] = contourf(BlockSinglesMovie);
-      g.LevelList = [0,2000,4000,6000,8000,10000,12000,14000,16000,18000,20000];
-      %g.LevelStep = 800;
-      %g.LevelStepMode = 'manual';
-      %g.ShowText = 'on';
+      %v = [0,1000,2000,3000,4000,5000,6000,7000,8000,9000, ...
+      %    10000,11000,12000,13000,14000,15000,16000,17000, ...
+      %    18000,19000,20000];
+      %contourf(BlockSinglesMovie);
+      surf(BlockSinglesMovie);
+      zlim([0 22000]);
+      hold on;
+      imagesc(BlockSinglesMovie);
+      hold off;
+      colormap(hot);
       legend(strcat('Time: ',num2str(k*2),' s'),'Location','North');
+      caxis([0 22000]);
       c = colorbar;
       c.Label.String = 'Bucket Singles Rate';
       xlabel('Ring Number');
-      ylabel('Single Bucket Number');
+      ylabel('Single-Bucket Number');
+      zlabel('Bucket Singles Rate');
       drawnow
-      F(k) = getframe(gcf);
+      %F(k) = getframe(gcf);
+      G(k) = getframe(gcf);
     end
     
-    fig = figure;
-    movie(fig,F,1,24)
+    fig = figure('Name', 'Unrolled Rings of Single-Buckets');
+    %movie(fig,F,1,24)
+    movie(fig,G,1,24)
     
 end
+
+% Playing around for Gaussian-Fit
+%[x,y]=meshgrid(1:8,1:28);
+z = zeros(28,8);
+readPosition = 1;
+for i=1:8
+  for j=1:28
+    z(j,i) = BlockSingles(37,readPosition);
+    readPosition = readPosition + 1;
+  end
+end
+figure;
+imagesc(z);
+zmin = min(min(z));
+zmax = max(max(z));
+[izmax,jzmax] = find(z==zmax);
+if izmax<7
+    temp = zeros(28,8);
+    for i=1:22
+        temp((i+6),:)=z(i,:);
+    end
+    for i=23:1:28
+        temp((i-22),:)=z(i,:);
+    end
+    figure;
+    imagesc(temp);
+elseif izmax>21
+    temp = zeros(28,8);
+    for i=1:6
+        temp((i+22),:)=z(i,:);
+    end
+    for i=7:1:28
+        temp((i-6),:)=z(i,:);
+    end
+    figure;
+    imagesc(temp);
+end
+z = z-zmin;
+zx = z(izmax,:)';
+zy = z(:,jzmax);
+x = (1:8)';
+y = (1:28)';
+fitx = fit(x,zx,'gauss1');
+fity = fit(y,zy,'gauss1','Exclude', zy<1000);
+smooth09x = fit(x,zx,'smoothingspline','SmoothingParam',0.9);
+smooth09y = fit(y,zy,'smoothingspline','SmoothingParam',0.9,'Exclude', zy<1000);
+smooth1x = fit(x,zx,'smoothingspline','SmoothingParam',1);
+smooth1y = fit(y,zy,'smoothingspline','SmoothingParam',1,'Exclude', zy<1000);
+figure;
+plot(fitx,x',zx');
+figure;
+plot(fity,y',zy');
+figure;
+plot(smooth09x,x',zx');
+figure;
+plot(smooth09y,y',zy');
+figure;
+plot(smooth1x,x',zx');
+figure;
+plot(smooth1y,y',zy');
+
+cftool
+%%%%%%%%%%%%%%%%%%
 
 clear dlist
 
