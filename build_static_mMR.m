@@ -249,6 +249,7 @@ elseif options==5
   time = 499; %BlancScan
   %time = 88; %TransmissionScan
   %time = 29; %Dead-Time Scans
+  timef= 482; %BlancScan
   D=0;
   millionEvents=0;
   BlockSingles = zeros(time,224);
@@ -288,45 +289,7 @@ elseif options==5
   ylabel('Ring Number');
   xlabel('Time [s]');
   
-  figure;
-  BlockSinglesMovie = zeros(28,8);
-  F(time) = struct('cdata',[],'colormap',[]);
-  %G(time) = struct('cdata',[],'colormap',[]);
-  for k=1:time
-    readPosition = 1;
-    for i=1:8
-      for j=1:28
-        BlockSinglesMovie(j,i) = BlockSingles(k,readPosition);
-        readPosition = readPosition + 1;
-      end
-    end
-    %v = [0,1000,2000,3000,4000,5000,6000,7000,8000,9000, ...
-    %    10000,11000,12000,13000,14000,15000,16000,17000, ...
-    %    18000,19000,20000];
-    %contourf(BlockSinglesMovie);
-    %surf(BlockSinglesMovie);
-    %zlim([0 22000]);
-    %hold on;
-    imagesc(BlockSinglesMovie);
-    %hold off;
-    colormap(hot);
-    legend(strcat('Time: ',num2str(k*2),' s'),'Location','North');
-    caxis([0 22000]);
-    c = colorbar;
-    c.Label.String = 'Bucket Singles Rate';
-    xlabel('Ring Number');
-    ylabel('Single-Bucket Number');
-    zlabel('Bucket Singles Rate');
-    drawnow
-    F(k) = getframe(gcf);
-    %G(k) = getframe(gcf);
-  end
-    
-  fig = figure('Name', 'Unrolled Rings of Single-Buckets');
-  movie(fig,F,1,24)
-  %movie(fig,G,1,24)
-end
-
+%______________________________________________________
 % Gaussian-Fit
 for k = 1:time
   z = zeros(28,8);
@@ -337,8 +300,8 @@ for k = 1:time
       readPosition = readPosition + 1;
     end
   end
-  %figure('Name', 'Initial Distribution of Single-Rates');
-  %imagesc(z);
+  figure('Name', 'Initial Distribution of Single-Rates');
+  imagesc(z);
   zmin = min(min(z));
   zmax = max(max(z));
   downshift=0;
@@ -397,12 +360,16 @@ for k = 1:time
     zyeval= feval(fity,yeval);
     
     %Account for shift of x-component of the z-Matrix
+    %  388 corresponds to  6  -> yeval( 388)= 5.9934
+    %  389 corresponds to  7  -> yeval( 389)= 6.0089
+    % 1421 corresponds to 22  -> yeval(1421)=21.9912
+    % 1422 corresponds to 23  -> yeval(1422)=22.0066
     if downshift
       tempzyeval = zeros(length(zyeval),1);
       for i = 1:1421
         tempzyeval(i+388) = zyeval(i);
       end
-      for i = 1422:1:1809
+      for i = 1422:1:length(zyeval)
         tempzyeval(i-1421) = zyeval(i);
       end
       zyeval = tempzyeval;
@@ -412,7 +379,7 @@ for k = 1:time
       for i = 1:388          
         tempzyeval(i+1421) = zyeval(i);
       end
-      for i = 389:1:1809
+      for i = 389:1:length(zyeval)
         tempzyeval(i-388) = zyeval(i);
       end
       zyeval = tempzyeval;
@@ -428,9 +395,9 @@ for k = 1:time
   end
 end
 
-figure;
-plot(fity1D);
-
+%figure;
+%plot(fity1D);
+% Flatten the fity to prepare for global fitting
 rounds = 1;
 flaty1D = fity1D;
 for k = 1:length(flaty1D)
@@ -444,50 +411,96 @@ for k = 1:length(flaty1D)
     end
   end
 end
-figure;
-plot(flaty1D);
+%figure;
+%plot(flaty1D);
 
-for i = 1:475
-    newfity(i) = flaty1D(i);
+% cut ends where transmission source is leaving helix
+for i = 1:timef
+  newfity(i) = flaty1D(i);
 end
-figure;
+figure('Name', 'Cutted Fit Y');
 plot(newfity);
-for i = 1:475
-    newfitx(i)=fitx1D(i);
+for i = 1:timef
+  newfitx(i)=fitx1D(i);
 end
-figure;
+figure('Name', 'Cutted Fit X');
 plot(newfitx);
 
-%Fitting the finished Values:
-xnewfitx = (1:475)';
-ynewfity = (1:475)';
-fitTotalx = fit(xnewfitx,newfitx','poly3');
-fitTotaly = fit(ynewfity,newfity','poly3');
-figure('Name','Total Fit x');
-plot(fitTotalx,xnewfitx',newfitx');
-figure('Name','Total Fit y');
-plot(fitTotaly,ynewfity',newfity');
+%Fitting the global Values
+xnewfitx = (1:timef)';
+ynewfity = (1:timef)';
+fitGlobalx = fit(xnewfitx,newfitx','poly3');
+fitGlobaly = fit(ynewfity,newfity','poly3');
+figure('Name','Global Fit X');
+plot(fitGlobalx,xnewfitx',newfitx');
+figure('Name','Global Fit Y');
+plot(fitGlobaly,ynewfity',newfity');
+%Evaluating global Fit
+tevalx = (0:timef);
+tevaly = (0:timef);
+fitGlobalxeval= feval(fitGlobalx,tevalx);
+fitGlobalyeval= feval(fitGlobaly,tevaly);
 
-tevalx = (0:475);
-tevaly = (0:475);
-fitTotalxeval= feval(fitTotalx,tevalx);
-fitTotalyeval= feval(fitTotaly,tevaly);
+rounds = 1;
+for k = 1:length(fitGlobalyeval)
+  if fitGlobalyeval(k)>28
+    fitGlobalyeval(k) = fitGlobalyeval(k) - rounds*28;
+  end
+  if fitGlobalyeval(k)>28
+    rounds = rounds + 1;
+    fitGlobalyeval(k) = fitGlobalyeval(k) - 28;
+  end
+end
+  %cftool
+  %______________________________________________________
 
-plot(nofitx);
-hold on
-plot(fitTotalyeval);
-hold off
-
-plot(nofity);
-hold on
-plot(newfitx);
-hold on
-plot(fitTotalxeval);
-hold off
-
-%cftool
-%%%%%%%%%%%%%%%%%%
-
+  figure;
+  BlockSinglesMovie = zeros(28,8);
+  F(time) = struct('cdata',[],'colormap',[]);
+  %G(time) = struct('cdata',[],'colormap',[]);
+  for k=1:time
+    readPosition = 1;
+    for i=1:8
+      for j=1:28
+        BlockSinglesMovie(j,i) = BlockSingles(k,readPosition);
+        readPosition = readPosition + 1;
+      end
+    end
+    %v = [0,1000,2000,3000,4000,5000,6000,7000,8000,9000, ...
+    %    10000,11000,12000,13000,14000,15000,16000,17000, ...
+    %    18000,19000,20000];
+    contourf(BlockSinglesMovie);
+    %surf(BlockSinglesMovie);
+    %zlim([0 22000]);
+    %zlabel('Bucket Singles Rate');
+    %hold on;
+    %imagesc(BlockSinglesMovie);
+    %hold off;
+    colormap(hot);
+    legend(strcat('Time: ',num2str(k*2),' s'),'Location','North');
+    caxis([0 22000]);
+    c = colorbar;
+    c.Label.String = 'Bucket Singles Rate';
+    xlabel('Ring Number');
+    xlim([0 9])
+    ylabel('Single-Bucket Number');
+    ylim([0 28])
+    %hold on;
+    %plot(newfitx(k), fity1D(k), 'c*', 'MarkerSize', 20, 'LineWidth', 3)
+    if k <= timef
+      hold on;
+      plot(fitGlobalxeval(k), fity1D(k), 'b+', 'MarkerSize', 20, 'LineWidth', 3)
+      hold off;
+    end
+    drawnow
+    F(k) = getframe(gcf);
+    %G(k) = getframe(gcf);
+  end
+    
+  fig = figure('Name', 'Unrolled Rings of Single-Buckets');
+  movie(fig,F,1,24)
+  %movie(fig,G,1,24)
+end
 
 clear dlist
 
