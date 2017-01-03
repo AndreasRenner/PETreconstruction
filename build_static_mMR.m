@@ -1,10 +1,9 @@
-function build_sino_static(filename, options)
-
+function build_static_mMR(filename)
+% Basic Parameters of Siemens Biograph mMR
 Nbins   = 344;         % Number of radial bins
 Nproj   = 252;         % Number of projections
 Nplanes = 4084;        % Number of 3D sinogram planes
 
-paso_t  = 0.001;
 sinoDim = Nbins * Nproj * Nplanes;
 
 % Choose the file from an UI
@@ -12,20 +11,43 @@ sinoDim = Nbins * Nproj * Nplanes;
 %cd(path);
 % Get the Number of Counts (Ncs) from the size of the file
 %cd('/home/andreas/data/PET_raw_data_20160603');
-filesize=dir(filename);
-Ncs=ceil(filesize.bytes/4);
+
+% Estimate Number of Tags from Filesize
+filesize = dir(filename);
+Ncs      = ceil(filesize.bytes/4);
 clear filesize;
 fprintf('Estimated Number of Tags: \t %10.0f\r', Ncs);
 
-fid=fopen(filename,'r');
-dlist=fread(fid,[Ncs],'uint32');    
+% Read File into a List
+fid   = fopen(filename,'r');
+dlist = fread(fid,[Ncs],'uint32');    
 fclose(fid);
 clear fid;
 %cd('/home/andreas/code/PETreconstruction');
 
+% Get acquisition time in ms and output frequency of Tags
+acqTime = tagFrequency(dlist);
+fprintf('Acquisition time: %u [ms]', acqTime);
+
+% Output prompts per second
+p_s(dlist);
+
+% Output detailed dead-time information
+deadtimeinfo(dlist);
+
+% Cut the first X and the last Y ms of acquisition
+cutdlist = cutlmdata(dlist);
+
+% Create Sinograms
+makesino(cutdlist);
+
+end
+
+
+
 % -------------------------------------------------------
-% Option 0: Output detailed information about all Tags
-if options==0
+% Get frequency of all individual Tags
+function duration = tagFrequency(dlist)
   % Event Packets:  0XXX ...
   prompts    = 0; % 01XX ...
   delays     = 0; % 00XX ...
@@ -82,10 +104,13 @@ if options==0
   fprintf('Motion Tags:    \t %10.0f\r', motionTag);
   fprintf('Patient Tags:   \t %10.0f\r', patientTag);
   fprintf('Control Tags:   \t %10.0f\r', controlTag);
+  
+  duration = timeTag;
+end
 
 % -------------------------------------------------------
-% Option 1: Output prompts per second
-elseif options==1
+% Get prompts per second
+function p_s(dlist)
   p=0;
   T=0;
   tmplen=0;
@@ -101,10 +126,11 @@ elseif options==1
       T=T+1;
     end
   end
+end
     
 % -------------------------------------------------------
-% Option 2: Output detailed dead-time information
-elseif options==2
+% Output detailed dead-time information
+function deadtimeinfo(dlist)
   D=0;
   LostEventsFirstLossyNode=0;
   LostEventsSecondLossyNode=0;
@@ -144,10 +170,11 @@ elseif options==2
   fprintf('Total number of lost event packets: \t %u\r', totalLoss);
   fprintf('Total number of initial events: \t~%u\r', totalEvents);
   fprintf('Estimated Number of Tags: \t %u\r', Ncs);
-    
+end
+
 % -------------------------------------------------------
-% Option 3: Create Sinograms of the whole acquisition
-elseif options==3
+% Create Sinograms of the whole acquisition
+function makesino(dlist)
   % Prompts between [001111...1] and [01111...1]
   ptag = dlist(find((dlist<2^31)&(dlist>=2^30)));
   % Randoms lower or equal [001111...1]
@@ -172,11 +199,11 @@ elseif options==3
   fprintf('Finished reading list file\r\n');
   fprintf('Prompts\t\t:\t%s\r',num2str(length(ptag)));
   fprintf('Randoms\t\t:\t%s\r',num2str(length(rtag)));
-    
+end
+
 % -------------------------------------------------------
-% Option 4: Cut the first X and the last Y ms of the acquisition
-% and create Sinograms of the remaining events
-elseif options==4
+% Cut the first X and the last Y ms of acquisition
+function cutdlist = cutlmdata(dlist)
   % Read values for X and Y
   promptx='Enter time in ms you want to cut at the beginning:';
   prompty='Enter time in ms you want to cut at the end:';
@@ -190,66 +217,15 @@ elseif options==4
     
   % Create the cut data list
   cutdlist = dlist(posx:posy);
-    
-  % Prompts between [001111...1] and [01111...1]
-  ptag = cutdlist(find((cutdlist<2^31)&(cutdlist>=2^30)));
-  % Randoms lower or equal [001111...1]
-  rtag = cutdlist(find((cutdlist<2^30)));
+end
 
-  % TAGs (Time marks, dead-time tracking, fisio marks)
-  Ttag = cutdlist(find((cutdlist>=2^31)&(cutdlist<2684354560)));
-  Ttags=length(Ttag);
-  time =Ttags*paso_t;
-  clear Ttag;
-  Dtag = cutdlist(find((cutdlist>=2684354560)&(cutdlist<3221225472)));
-  Dtags=length(Dtag);
-  clear Dtag;
-  Ftag = cutdlist(find((cutdlist>=3758096384)&(cutdlist<3825205248)));
-  Ftags=length(Ftag);
-  clear Ftag;
-
-  % remove preceding tag - necessary for ptag only, as the preceding
-  % tag of rtag is already 0
-  ptag = ptag-(2^30);
-  % clear out-of-sinogram indices
-  % -> bin-address of event packet has to be between 0 and sinoDim
-  ptag = ptag((ptag<=sinoDim)&(ptag>0));
-  rtag = rtag((rtag<=sinoDim)&(rtag>0));    
-
-  % build sinograms
-  sino=accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
-    
-  ptags = length(ptag);
-  rtags = length(rtag);
-  Ntags = ptags + rtags + Ttags + Dtags + Ftags;
-  clear ptag;
-  clear rtag;
-    
-  % write sinograms to file
-  sinogramname = strcat('sinogram_static_', filename, '_cut.raw');
-  fid=fopen(sinogramname,'w');
-  fwrite(fid,uint16(sino),'uint16');
-  fclose(fid);
-
-  % Output for user
-  fprintf('Finished reading list file\r\n');
-  fprintf('Prompts\t\t:\t%s\r',num2str(ptags));
-  fprintf('Randoms\t\t:\t%s\r',num2str(rtags));
-  fprintf('ACQ time [s]\t:\t%s\r',num2str(time));
-  fprintf('Total Number of Tags \t:\t%s\r\n',num2str(Ntags));
-    
-  if(Ntags<Ncs);
-    %fprintf('Total number of Tags is smaller than "Ncs"!\n');
-    fprintf('All Tags of the file were considered!\n');
-  end
-    
 % -------------------------------------------------------
 % Option 5: Show block singles
 elseif options==5
-  time = 499; %BlancScan
-  %time = 88; %TransmissionScan
+  %time = 499; %BlancScan
+  time = 88; %TransmissionScan
   %time = 29; %Dead-Time Scans
-  timef= 482; %BlancScan
+  %timef= 482; %BlancScan
   D=0;
   millionEvents=0;
   BlockSingles = zeros(time,224);
@@ -291,6 +267,7 @@ elseif options==5
   
 %______________________________________________________
 % Gaussian-Fit
+backward = 1;
 for k = 1:time
   z = zeros(28,8);
   readPosition = 1;
@@ -308,10 +285,16 @@ for k = 1:time
   upshift=0;
   if (zmax-zmin)<1000
     fprintf('%u: Peak is too small for fitting!\r',k);
+    tempstart = k;
   else
+    tstart = tempstart+1;
+    tstop  = k;
     [izmax,jzmax] = find(z==zmax);
-    nofitx(k) = izmax;
-    nofity(k) = jzmax;
+    nofitx(k) = izmax(1);
+    nofity(k) = jzmax(1);
+    if k==tstart+1 && jzmax>6
+      backward=1;
+    end
     if izmax<7
       temp = zeros(28,8);
       for i=1:22
@@ -340,8 +323,8 @@ for k = 1:time
       izmax = izmax - 6;
     end
     z = z-zmin;
-    zx = z(izmax,:)';
-    zy = z(:,jzmax);
+    zx = z(izmax(1),:)';
+    zy = z(:,jzmax(1));
     x = (1:8)';
     y = (1:28)';
     fitx = fit(x,zx,'gauss1');
@@ -394,14 +377,25 @@ for k = 1:time
     %fprintf('%u: x0=%u, y0=%u\r',k,fitx1D(k),fity1D(k));
   end
 end
+fprintf('Start: %u, stop: %u \r',tstart,tstop);
 
-%figure;
-%plot(fity1D);
+figure;
+plot(fity1D);
 % Flatten the fity to prepare for global fitting
 rounds = 1;
 flaty1D = fity1D;
-for k = 1:length(flaty1D)
-  if k>1
+if backward
+  for k = (length(flaty1D)-2):-1:2
+    if flaty1D(k-1)<flaty1D(k)
+      flaty1D(k-1) = flaty1D(k-1) + rounds*28;
+    end
+    if flaty1D(k-1)<flaty1D(k)
+      rounds = rounds + 1;
+      flaty1D(k-1) = flaty1D(k-1) + 28;
+    end
+  end
+else
+  for k = 2:1:length(flaty1D)
     if flaty1D(k)<flaty1D(k-1)
       flaty1D(k) = flaty1D(k) + rounds*28;
     end
@@ -411,24 +405,24 @@ for k = 1:length(flaty1D)
     end
   end
 end
-%figure;
-%plot(flaty1D);
+figure;
+plot(flaty1D);
 
 % cut ends where transmission source is leaving helix
-for i = 1:timef
-  newfity(i) = flaty1D(i);
+for i = tstart:1:(tstop-2)
+  newfity(i-tstart+1) = flaty1D(i);
 end
 figure('Name', 'Cutted Fit Y');
 plot(newfity);
-for i = 1:timef
-  newfitx(i)=fitx1D(i);
+for i = tstart:1:(tstop-2)
+  newfitx(i-tstart+1)=fitx1D(i);
 end
 figure('Name', 'Cutted Fit X');
 plot(newfitx);
 
 %Fitting the global Values
-xnewfitx = (1:timef)';
-ynewfity = (1:timef)';
+xnewfitx = (tstart:(tstop-2))';
+ynewfity = (tstart:(tstop-2))';
 fitGlobalx = fit(xnewfitx,newfitx','poly3');
 fitGlobaly = fit(ynewfity,newfity','poly3');
 figure('Name','Global Fit X');
@@ -436,8 +430,8 @@ plot(fitGlobalx,xnewfitx',newfitx');
 figure('Name','Global Fit Y');
 plot(fitGlobaly,ynewfity',newfity');
 %Evaluating global Fit
-tevalx = (0:timef);
-tevaly = (0:timef);
+tevalx = (0:tstop);
+tevaly = (0:tstop);
 fitGlobalxeval= feval(fitGlobalx,tevalx);
 fitGlobalyeval= feval(fitGlobaly,tevaly);
 
@@ -487,7 +481,7 @@ end
     ylim([0 28])
     %hold on;
     %plot(newfitx(k), fity1D(k), 'c*', 'MarkerSize', 20, 'LineWidth', 3)
-    if k <= timef
+    if k <= tstop
       hold on;
       plot(fitGlobalxeval(k), fity1D(k), 'b+', 'MarkerSize', 20, 'LineWidth', 3)
       hold off;
@@ -498,11 +492,10 @@ end
   end
     
   fig = figure('Name', 'Unrolled Rings of Single-Buckets');
-  movie(fig,F,1,24)
+  movie(fig,F,1,1)
   %movie(fig,G,1,24)
 end
 
 clear dlist
-
 
 end
