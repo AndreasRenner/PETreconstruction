@@ -1,10 +1,4 @@
 function build_static_mMR(filename)
-% Basic Parameters of Siemens Biograph mMR
-Nbins   = 344;         % Number of radial bins
-Nproj   = 252;         % Number of projections
-Nplanes = 4084;        % Number of 3D sinogram planes
-
-sinoDim = Nbins * Nproj * Nplanes;
 
 % Choose the file from an UI
 %[filename, path]=uigetfile('*.*');
@@ -16,7 +10,7 @@ sinoDim = Nbins * Nproj * Nplanes;
 filesize = dir(filename);
 Ncs      = ceil(filesize.bytes/4);
 clear filesize;
-fprintf('Estimated Number of Tags: \t %10.0f\r', Ncs);
+fprintf('Estimated Number of Tags: \t %10.0f\r\n', Ncs);
 
 % Read File into a List
 fid   = fopen(filename,'r');
@@ -27,22 +21,34 @@ clear fid;
 
 % Get acquisition time in ms and output frequency of Tags
 acqTime = tagFrequency(dlist);
-fprintf('Acquisition time: %u [ms]', acqTime);
+fprintf('Acquisition time: %u [ms]\r', acqTime);
 
-% Output prompts per second
-p_s(dlist);
-
-% Output detailed dead-time information
-deadtimeinfo(dlist);
+% Output prompts per second/10
+% ->Output should be used to determine the time when
+%   Transmission source is entering/leaving helical path
+acqTimeSec = floor(acqTime*0.01);
+temporalPromptDistribution = p_s(dlist,acqTimeSec);
+figure('Name','Temporal Distribution of Prompts');
+plot(temporalPromptDistribution);
+xlabel('Time [s]');
+ylabel('Prompts per second');
+%findpeaks(temporalPromptDistribution,'Annotate','extents','WidthReference','halfheight');
 
 % Cut the first X and the last Y ms of acquisition
-cutdlist = cutlmdata(dlist);
+dlist = cutlmdata(dlist);
+
+% Output detailed dead-time information and
+% Get TimeTag of SingleBuckets
+singleBucketTimes = deadTimeInfo(dlist);
+
+% Show Bucket-Single rates
+singleTime = length(singleBucketTimes);
+showBucketSingles(dlist,singleTime);
 
 % Create Sinograms
-makesino(cutdlist);
+a=makeSino(cutdlist);
 
 end
-
 
 
 % -------------------------------------------------------
@@ -58,45 +64,58 @@ function duration = tagFrequency(dlist)
   patientTag = 0; % 1110 ...
   controlTag = 0; % 1111 ...
   currentTime= 0;
+  
+  fprintf('****************************************************************\r');
+  fprintf('START Detailed Information about Frequency of individual Tags:\r');
+  fprintf('Special Control/Patient Tags:\r');
+  specialTagCounter = 0;
+  
   for i=1:length(dlist)
     if       dlist(i) < 1073741824
       delays = delays + 1;
-      %fprintf('Pos. %u\tat %s ms:\tDelay Event:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
+      %fprintf('Pos %u\tat %s ms:\tDelay Event:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
     elseif   dlist(i) < 2147483648
       prompts = prompts + 1;
-      %fprintf('Pos. %u\tat %s ms:\tPrompt Event:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
+      %fprintf('Pos %u\tat %s ms:\tPrompt Event:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
     elseif   dlist(i) < 2684354560
       timeTag = timeTag + 1;
       currentTime=num2str(dlist(i)-2^31);
-      %fprintf('Pos. %u\tat %s ms:\tTime Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
+      %fprintf('Pos %u\tat %s ms:\tTime Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
     elseif   dlist(i) < 3221225472
       DtimeTag = DtimeTag + 1;
-      %fprintf('Pos. %u\tat %s ms:\tDead-Time Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
+      %fprintf('Pos %u\tat %s ms:\tDead-Time Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
     elseif   dlist(i) < 3758096384
       motionTag = motionTag + 1;
-      %fprintf('Pos. %u\tat %s ms:\Motion Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
+      %fprintf('Pos %u\tat %s ms:\Motion Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
     elseif   dlist(i) < 4026531840
       patientTag = patientTag + 1;
       if     dlist(i)== 3774877696
-        fprintf('Pos. %u\tat %s ms:\tPatient Tag - Respiratory Trigger Gate on\r',i,currentTime);
+        specialTagCounter = specialTagCounter + 1;
+        fprintf('Pos %u\tat %s ms:\tPatientTag - Respiratory Trigger Gate on\r',i,currentTime);
       elseif dlist(i)== 3774877697
-        fprintf('Pos. %u\tat %s ms:\tPatient Tag - Respiratory Trigger Gate off\r',i,currentTime);
+        specialTagCounter = specialTagCounter + 1;
+        fprintf('Pos %u\tat %s ms:\tPatientTag - Respiratory Trigger Gate off\r',i,currentTime);
       end
-      %fprintf('Pos. %u\tat %s ms:\tPatient Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
+      %fprintf('Pos %u\tat %s ms:\tPatient Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
     else
       controlTag = controlTag + 1;
       if     dlist(i)==4294901760
-        fprintf('Pos. %u\tat %s ms:\tControl Tag - Start of Acquisition\r',i,currentTime);
+        fprintf('Pos %u\tat %s ms:\tControlTag - Start of Acquisition\r',i,currentTime);
       elseif dlist(i)==4286545920
-        fprintf('Pos. %u\tat %s ms:\tControl Tag - Time Synchronization with MR\r',i,currentTime);
+        fprintf('Pos %u\tat %s ms:\tControlTag - Time Synchronization with MR\r',i,currentTime);
       end
-      %fprintf('Pos. %u\tat %s ms:\tControl Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));     
+      %fprintf('Pos %u\tat %s ms:\tControl Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));     
     end
   end
+  
+  if specialTagCounter==0
+    fprintf('None\r');
+  end
+  
   events = prompts + delays;
   tags   = timeTag + DtimeTag + motionTag + patientTag + controlTag;
   fprintf('Total number of Event Packets: \t %10.0f\r', events);
-  fprintf('Total number of Tag Packets:   \t %10.0f\r\n', tags);
+  fprintf('Total number of Tag Packets:   \t %10.0f\r', tags);
   fprintf('Prompt Events:  \t %10.0f\r', prompts);
   fprintf('Delay Events:   \t %10.0f\r', delays);
   fprintf('Time Tags:      \t %10.0f\r', timeTag);
@@ -104,24 +123,31 @@ function duration = tagFrequency(dlist)
   fprintf('Motion Tags:    \t %10.0f\r', motionTag);
   fprintf('Patient Tags:   \t %10.0f\r', patientTag);
   fprintf('Control Tags:   \t %10.0f\r', controlTag);
+  fprintf('END Detailed Information about Frequency of individual Tags\r');
+  fprintf('****************************************************************\r\n');
   
+  % Return scan-duration in [ms]
   duration = timeTag;
 end
 
 % -------------------------------------------------------
-% Get prompts per second
-function p_s(dlist)
+% Get prompts per second/10
+function [z] = p_s(dlist,time)
   p=0;
   T=0;
   tmplen=0;
+  z = zeros(time,1);
   for i=1:length(dlist)
     if (dlist(i)<(2^31))&&(dlist(i)>=(2^30))
       p=p+1;
     elseif (dlist(i)>=(2^31))&&(dlist(i)<2684354560)
       Ttag=dlist(i);
-      if mod(Ttag-(2^31),1000)==0
-        fprintf('Prompts in s %u: %u\r', T/1000, (p-tmplen));
-        tmplen=p;
+      if mod(Ttag-(2^31),100)==0
+        tmptime = T*0.01;
+        if tmptime>0
+          z(tmptime) = p-tmplen;
+          tmplen=p;
+        end
       end
       T=T+1;
     end
@@ -130,8 +156,9 @@ end
     
 % -------------------------------------------------------
 % Output detailed dead-time information
-function deadtimeinfo(dlist)
+function [singleBucket] = deadTimeInfo(dlist)
   D=0;
+  bucketRounds = 0;
   LostEventsFirstLossyNode=0;
   LostEventsSecondLossyNode=0;
   millionEvents=0;
@@ -148,16 +175,20 @@ function deadtimeinfo(dlist)
         loss=bin2dec(binaryTag(13:32));
         LostEventsFirstLossyNode=LostEventsFirstLossyNode+loss;
         millionEvents=millionEvents+1;
-        fprintf('1. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
+        %fprintf('1. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
       elseif typefield==6
         loss=bin2dec(binaryTag(13:32));
         LostEventsSecondLossyNode=LostEventsSecondLossyNode+loss;
         millionEvents=millionEvents+1;
-        fprintf('2. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
+        %fprintf('2. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
       else
         blocknum=bin2dec(binaryTag(4:13));
-        singles=bin2dec(binaryTag(14:32));
-        fprintf('Block: %u\tSingles: %u\t Time[ms]: %s\r',blocknum,singles,Ttag);
+        %singles=bin2dec(binaryTag(14:32));
+        %fprintf('Block: %u\tSingles: %u\t Time[ms]: %s\r',blocknum,singles,Ttag);
+        if blocknum == 223
+          bucketRounds = bucketRounds + 1;
+          singleBucket(bucketRounds) = str2num(Ttag);
+        end
       end
     end
   end
@@ -169,12 +200,17 @@ function deadtimeinfo(dlist)
   fprintf('Number of lost events inserted by the "2. Lossy Node": %u\r', LostEventsSecondLossyNode);
   fprintf('Total number of lost event packets: \t %u\r', totalLoss);
   fprintf('Total number of initial events: \t~%u\r', totalEvents);
-  fprintf('Estimated Number of Tags: \t %u\r', Ncs);
 end
 
 % -------------------------------------------------------
-% Create Sinograms of the whole acquisition
-function makesino(dlist)
+% Create Sinograms
+function makeSino(dlist)
+  % Basic Parameters of Siemens Biograph mMR
+  Nbins   = 344;         % Number of radial bins
+  Nproj   = 252;         % Number of projections
+  Nplanes = 4084;        % Number of 3D sinogram planes
+  sinoDim = Nbins * Nproj * Nplanes;
+  
   % Prompts between [001111...1] and [01111...1]
   ptag = dlist(find((dlist<2^31)&(dlist>=2^30)));
   % Randoms lower or equal [001111...1]
@@ -195,18 +231,18 @@ function makesino(dlist)
   fwrite(fid,uint16(sino),'uint16');
   fclose(fid);
 
-    % Output for user
+  % Output for user
   fprintf('Finished reading list file\r\n');
   fprintf('Prompts\t\t:\t%s\r',num2str(length(ptag)));
   fprintf('Randoms\t\t:\t%s\r',num2str(length(rtag)));
 end
 
 % -------------------------------------------------------
-% Cut the first X and the last Y ms of acquisition
+% Cut the first X and after Y ms of acquisition
 function cutdlist = cutlmdata(dlist)
   % Read values for X and Y
-  promptx='Enter time in ms you want to cut at the beginning:';
-  prompty='Enter time in ms you want to cut at the end:';
+  promptx='Enter time in ms you want first cut:';
+  prompty='Enter time in ms you want second cut:';
   x=input(promptx);
   y=input(prompty);
   
@@ -220,12 +256,8 @@ function cutdlist = cutlmdata(dlist)
 end
 
 % -------------------------------------------------------
-% Option 5: Show block singles
-elseif options==5
-  %time = 499; %BlancScan
-  time = 88; %TransmissionScan
-  %time = 29; %Dead-Time Scans
-  %timef= 482; %BlancScan
+% Show single-bucket rates
+function showBucketSingles(dlist,time)
   D=0;
   millionEvents=0;
   BlockSingles = zeros(time,224);
@@ -250,7 +282,6 @@ elseif options==5
       end
     end
   end
-  clear dlist;
   totalEvents=millionEvents*1048575;
   fprintf('Total Dead-time marks: %u\r',D);
   fprintf('Total number of initial events: \t~%u\r', totalEvents);
@@ -267,7 +298,7 @@ elseif options==5
   
 %______________________________________________________
 % Gaussian-Fit
-backward = 1;
+backward = 0;
 for k = 1:time
   z = zeros(28,8);
   readPosition = 1;
@@ -277,22 +308,19 @@ for k = 1:time
       readPosition = readPosition + 1;
     end
   end
-  figure('Name', 'Initial Distribution of Single-Rates');
-  imagesc(z);
+  %figure('Name', 'Initial Distribution of Single-Rates');
+  %imagesc(z);
   zmin = min(min(z));
   zmax = max(max(z));
   downshift=0;
   upshift=0;
   if (zmax-zmin)<1000
     fprintf('%u: Peak is too small for fitting!\r',k);
-    tempstart = k;
   else
-    tstart = tempstart+1;
-    tstop  = k;
     [izmax,jzmax] = find(z==zmax);
-    nofitx(k) = izmax(1);
-    nofity(k) = jzmax(1);
-    if k==tstart+1 && jzmax>6
+    %nofitx(k) = izmax(1);
+    %nofity(k) = jzmax(1);
+    if k==1 && jzmax(1)>6
       backward=1;
     end
     if izmax<7
@@ -368,24 +396,26 @@ for k = 1:time
       zyeval = tempzyeval;
       %fprintf('%u: transaxial values are shifted by 6 detectors\r', k);
     end
+    
     %figure('Name','Evaluated xFit');
     %plot(xeval,zxeval);
     %figure('Name','Evaluated yFit');
     %plot(yeval,zyeval);
+    
     fitx1D(k) = xeval(find(zxeval==max(zxeval)));
     fity1D(k) = yeval(find(zyeval==max(zyeval)));
     %fprintf('%u: x0=%u, y0=%u\r',k,fitx1D(k),fity1D(k));
   end
 end
-fprintf('Start: %u, stop: %u \r',tstart,tstop);
 
 figure;
 plot(fity1D);
+
 % Flatten the fity to prepare for global fitting
 rounds = 1;
 flaty1D = fity1D;
 if backward
-  for k = (length(flaty1D)-2):-1:2
+  for k = length(flaty1D):-1:2
     if flaty1D(k-1)<flaty1D(k)
       flaty1D(k-1) = flaty1D(k-1) + rounds*28;
     end
@@ -408,30 +438,18 @@ end
 figure;
 plot(flaty1D);
 
-% cut ends where transmission source is leaving helix
-for i = tstart:1:(tstop-2)
-  newfity(i-tstart+1) = flaty1D(i);
-end
-figure('Name', 'Cutted Fit Y');
-plot(newfity);
-for i = tstart:1:(tstop-2)
-  newfitx(i-tstart+1)=fitx1D(i);
-end
-figure('Name', 'Cutted Fit X');
-plot(newfitx);
-
 %Fitting the global Values
-xnewfitx = (tstart:(tstop-2))';
-ynewfity = (tstart:(tstop-2))';
-fitGlobalx = fit(xnewfitx,newfitx','poly3');
-fitGlobaly = fit(ynewfity,newfity','poly3');
+xfitx = (1:time)';
+yfity = (1:time)';
+fitGlobalx = fit(xfitx,fitx1D','poly3');
+fitGlobaly = fit(yfity,flaty1D','poly3');
 figure('Name','Global Fit X');
-plot(fitGlobalx,xnewfitx',newfitx');
+plot(fitGlobalx,xfitx',fitx1D');
 figure('Name','Global Fit Y');
-plot(fitGlobaly,ynewfity',newfity');
+plot(fitGlobaly,yfity',flaty1D');
 %Evaluating global Fit
-tevalx = (0:tstop);
-tevaly = (0:tstop);
+tevalx = (1:time);
+tevaly = (1:time);
 fitGlobalxeval= feval(fitGlobalx,tevalx);
 fitGlobalyeval= feval(fitGlobaly,tevaly);
 
@@ -456,7 +474,7 @@ end
     readPosition = 1;
     for i=1:8
       for j=1:28
-        BlockSinglesMovie(j,i) = BlockSingles(k,readPosition);
+        BlockSinglesMovie(j,i)=BlockSingles(k,readPosition);
         readPosition = readPosition + 1;
       end
     end
@@ -481,7 +499,7 @@ end
     ylim([0 28])
     %hold on;
     %plot(newfitx(k), fity1D(k), 'c*', 'MarkerSize', 20, 'LineWidth', 3)
-    if k <= tstop
+    if k <= time
       hold on;
       plot(fitGlobalxeval(k), fity1D(k), 'b+', 'MarkerSize', 20, 'LineWidth', 3)
       hold off;
@@ -496,6 +514,3 @@ end
   %movie(fig,G,1,24)
 end
 
-clear dlist
-
-end
