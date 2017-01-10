@@ -30,7 +30,7 @@ acqTimeSec = floor(acqTime*0.01);
 temporalPromptDistribution = p_s(dlist,acqTimeSec);
 figure('Name','Temporal Distribution of Prompts');
 plot(temporalPromptDistribution);
-xlabel('Time [s]');
+xlabel('Time [s/10]');
 ylabel('Prompts per second');
 %findpeaks(temporalPromptDistribution,'Annotate','extents','WidthReference','halfheight');
 
@@ -39,11 +39,18 @@ dlist = cutlmdata(dlist);
 
 % Output detailed dead-time information and
 % Get TimeTag of SingleBuckets
-singleBucketTimes = deadTimeInfo(dlist);
+[singleBucketTimes,singleBuckets] = deadTimeInfo(dlist);
+difference = zeros((length(singleBucketTimes)-1),1);
+for i = 1:(length(singleBucketTimes)-1)
+  difference(i) = singleBucketTimes(i+1) - singleBucketTimes(i);
+end
+%***************************************************
+% ToDo: consider differences!!!
+%***************************************************
 
 % Show Bucket-Single rates
 singleTime = length(singleBucketTimes);
-showBucketSingles(dlist,singleTime);
+showBucketSingles(singleBuckets,singleTime);
 
 % Create Sinograms
 a=makeSino(cutdlist);
@@ -155,10 +162,10 @@ function [z] = p_s(dlist,time)
 end
     
 % -------------------------------------------------------
-% Output detailed dead-time information
-function [singleBucket] = deadTimeInfo(dlist)
+% Get Single-Buckets and output detailed dead-time information
+function [singleBucket,blockSingles] = deadTimeInfo(dlist)
   D=0;
-  bucketRounds = 0;
+  bucketRounds = 1;
   LostEventsFirstLossyNode=0;
   LostEventsSecondLossyNode=0;
   millionEvents=0;
@@ -183,11 +190,12 @@ function [singleBucket] = deadTimeInfo(dlist)
         %fprintf('2. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
       else
         blocknum=bin2dec(binaryTag(4:13));
-        %singles=bin2dec(binaryTag(14:32));
+        singles=bin2dec(binaryTag(14:32));        
+        blockSingles(bucketRounds,blocknum+1) = singles;
         %fprintf('Block: %u\tSingles: %u\t Time[ms]: %s\r',blocknum,singles,Ttag);
         if blocknum == 223
-          bucketRounds = bucketRounds + 1;
           singleBucket(bucketRounds) = str2num(Ttag);
+          bucketRounds = bucketRounds + 1;
         end
       end
     end
@@ -257,214 +265,177 @@ end
 
 % -------------------------------------------------------
 % Show single-bucket rates
-function showBucketSingles(dlist,time)
-  D=0;
-  millionEvents=0;
-  BlockSingles = zeros(time,224);
-  k=1;
-  for i=1:length(dlist)
-    if (dlist(i)>=2684354560)&&(dlist(i)<3221225472)
-      % Dead-Time Tag
-      D=D+1;
-      binaryTag=num2str(dec2bin(dlist(i)));
-      typefield=bin2dec(binaryTag(4:6));
-      if typefield==7
-        millionEvents=millionEvents+1;
-      elseif typefield==6
-        millionEvents=millionEvents+1;
-      else
-        blocknum=bin2dec(binaryTag(4:13));
-        singles=bin2dec(binaryTag(14:32));
-        BlockSingles(k,blocknum+1) = singles;
-        if blocknum == 223
-          k = k+1;
-        end
-      end
-    end
-  end
-  totalEvents=millionEvents*1048575;
-  fprintf('Total Dead-time marks: %u\r',D);
-  fprintf('Total number of initial events: \t~%u\r', totalEvents);
-  
+function showBucketSingles(BlockSingles,time)
+  colorMax = floor(max(max(BlockSingles))/1000)*1000;
   figure();
-  v = [0,3000,6000,9000,12000,14000,16000,17000,18000,19000,20000];
-  contourf(BlockSingles, v);
+  %v = [0,3000,6000,9000,12000,14000,16000,17000,18000,19000,20000];
+  contourf(BlockSingles,10);
   colormap(hot);
-  caxis([0 20000]);
+  caxis([0 colorMax]);
   c = colorbar;
   c.Label.String = 'Bucket Singles Rate';
   ylabel('Ring Number');
   xlabel('Time [s]');
   
-%______________________________________________________
-% Gaussian-Fit
-backward = 0;
-for k = 1:time
-  z = zeros(28,8);
-  readPosition = 1;
-  for i=1:8
-    for j=1:28
-      z(j,i) = BlockSingles(k,readPosition);
-      readPosition = readPosition + 1;
+  % Gaussian-Fit________________________________________
+  backward = 0;
+  for k = 1:time
+    z = zeros(28,8);
+    readPosition = 1;
+    for i=1:8
+      for j=1:28
+        z(j,i) = BlockSingles(k,readPosition);
+        readPosition = readPosition + 1;
+      end
+    end
+    %figure('Name', 'Initial Distribution of Single-Rates');
+    %imagesc(z);
+    zmin = min(min(z));
+    zmax = max(max(z));
+    downshift=0;
+    upshift=0;
+    if (zmax-zmin)<1000
+      fprintf('%u: Peak is too small for fitting!\r',k);
+    else
+      [izmax,jzmax] = find(z==zmax);
+      %nofitx(k) = izmax(1);
+      %nofity(k) = jzmax(1);
+      if k==1 && jzmax(1)>6
+        backward=1;
+      end
+      if izmax<7
+        temp = zeros(28,8);
+        for i=1:22
+          temp((i+6),:)=z(i,:);
+        end
+        for i=23:1:28
+          temp((i-22),:)=z(i,:);
+        end
+        %figure('Name', 'Upshifted Distribution of Single-Rates');
+        %imagesc(temp);
+        z = temp;
+        upshift=1;
+        izmax = izmax + 6;
+      elseif izmax>21
+        temp = zeros(28,8);
+        for i=1:6
+          temp((i+22),:)=z(i,:);
+        end
+        for i=7:1:28
+          temp((i-6),:)=z(i,:);
+        end
+        %figure('Name', 'Downshifted Distribution of Single-Rates');
+        %imagesc(temp);
+        z = temp;
+        downshift=1;
+        izmax = izmax - 6;
+      end
+      z = z-zmin;
+      zx = z(izmax(1),:)';
+      zy = z(:,jzmax(1));
+      x = (1:8)';
+      y = (1:28)';
+      fitx = fit(x,zx,'gauss1');
+      fity = fit(y,zy,'gauss1','Exclude', zy<1000);
+
+      %Evaluate fit
+      stepx = 1/32.2857;
+      stepy = 1/64.5714;
+      xeval = (0:stepx:9.02);
+      yeval = (0:stepy:28.01);
+      zxeval= feval(fitx,xeval);
+      zyeval= feval(fity,yeval);
+    
+      %Account for shift of x-component of the z-Matrix
+      %  388 corresponds to  6  -> yeval( 388)= 5.9934
+      %  389 corresponds to  7  -> yeval( 389)= 6.0089
+      % 1421 corresponds to 22  -> yeval(1421)=21.9912
+      % 1422 corresponds to 23  -> yeval(1422)=22.0066
+      if downshift
+        tempzyeval = zeros(length(zyeval),1);
+        for i = 1:1421
+          tempzyeval(i+388) = zyeval(i);
+        end
+        for i = 1422:1:length(zyeval)
+          tempzyeval(i-1421) = zyeval(i);
+        end
+        zyeval = tempzyeval;
+        %fprintf('%u: transaxial values are shifted by 6 detectors\r', k);
+      elseif upshift
+        tempzyeval = zeros(length(zyeval),1);
+        for i = 1:388          
+          tempzyeval(i+1421) = zyeval(i);
+        end
+        for i = 389:1:length(zyeval)
+          tempzyeval(i-388) = zyeval(i);
+        end
+        zyeval = tempzyeval;
+        %fprintf('%u: transaxial values are shifted by 6 detectors\r', k);
+      end
+      %figure('Name','Evaluated xFit');
+      %plot(xeval,zxeval);
+      %figure('Name','Evaluated yFit');
+      %plot(yeval,zyeval);
+    
+      fitx1D(k) = xeval(find(zxeval==max(zxeval)));
+      fity1D(k) = yeval(find(zyeval==max(zyeval)));
     end
   end
-  %figure('Name', 'Initial Distribution of Single-Rates');
-  %imagesc(z);
-  zmin = min(min(z));
-  zmax = max(max(z));
-  downshift=0;
-  upshift=0;
-  if (zmax-zmin)<1000
-    fprintf('%u: Peak is too small for fitting!\r',k);
+  figure('Name','Evaluated Transaxial Fit');
+  plot(fity1D);
+
+  % Flatten the fity to prepare for global fitting
+  rounds = 1;
+  flaty1D = fity1D;
+  if backward
+    for k = length(flaty1D):-1:2
+      if flaty1D(k-1)<flaty1D(k)
+        flaty1D(k-1) = flaty1D(k-1) + rounds*28;
+      end
+      if flaty1D(k-1)<flaty1D(k)
+        rounds = rounds + 1;
+        flaty1D(k-1) = flaty1D(k-1) + 28;
+      end
+    end
   else
-    [izmax,jzmax] = find(z==zmax);
-    %nofitx(k) = izmax(1);
-    %nofity(k) = jzmax(1);
-    if k==1 && jzmax(1)>6
-      backward=1;
-    end
-    if izmax<7
-      temp = zeros(28,8);
-      for i=1:22
-        temp((i+6),:)=z(i,:);
+    for k = 2:1:length(flaty1D)
+      if flaty1D(k)<flaty1D(k-1)
+        flaty1D(k) = flaty1D(k) + rounds*28;
       end
-      for i=23:1:28
-        temp((i-22),:)=z(i,:);
+      if flaty1D(k)<flaty1D(k-1)
+        rounds = rounds + 1;
+        flaty1D(k) = flaty1D(k) + 28;
       end
-      %figure('Name', 'Upshifted Distribution of Single-Rates');
-      %imagesc(temp);
-      z = temp;
-      upshift=1;
-      izmax = izmax + 6;
-    elseif izmax>21
-      temp = zeros(28,8);
-      for i=1:6
-        temp((i+22),:)=z(i,:);
-      end
-      for i=7:1:28
-        temp((i-6),:)=z(i,:);
-      end
-      %figure('Name', 'Downshifted Distribution of Single-Rates');
-      %imagesc(temp);
-      z = temp;
-      downshift=1;
-      izmax = izmax - 6;
-    end
-    z = z-zmin;
-    zx = z(izmax(1),:)';
-    zy = z(:,jzmax(1));
-    x = (1:8)';
-    y = (1:28)';
-    fitx = fit(x,zx,'gauss1');
-    fity = fit(y,zy,'gauss1','Exclude', zy<1000);
-    %smooth09x = fit(x,zx,'smoothingspline','SmoothingParam',0.9);
-    %smooth09y = fit(y,zy,'smoothingspline','SmoothingParam',0.9,'Exclude', zy<1000);
-    %figure('Name','xFit');
-    %plot(fitx,x',zx');
-
-    %Evaluate fit
-    stepx = 1/32.2857;
-    stepy = 1/64.5714;
-    xeval = (0:stepx:9.02);
-    yeval = (0:stepy:28.01);
-    zxeval= feval(fitx,xeval);
-    zyeval= feval(fity,yeval);
-    
-    %Account for shift of x-component of the z-Matrix
-    %  388 corresponds to  6  -> yeval( 388)= 5.9934
-    %  389 corresponds to  7  -> yeval( 389)= 6.0089
-    % 1421 corresponds to 22  -> yeval(1421)=21.9912
-    % 1422 corresponds to 23  -> yeval(1422)=22.0066
-    if downshift
-      tempzyeval = zeros(length(zyeval),1);
-      for i = 1:1421
-        tempzyeval(i+388) = zyeval(i);
-      end
-      for i = 1422:1:length(zyeval)
-        tempzyeval(i-1421) = zyeval(i);
-      end
-      zyeval = tempzyeval;
-      %fprintf('%u: transaxial values are shifted by 6 detectors\r', k);
-    elseif upshift
-      tempzyeval = zeros(length(zyeval),1);
-      for i = 1:388          
-        tempzyeval(i+1421) = zyeval(i);
-      end
-      for i = 389:1:length(zyeval)
-        tempzyeval(i-388) = zyeval(i);
-      end
-      zyeval = tempzyeval;
-      %fprintf('%u: transaxial values are shifted by 6 detectors\r', k);
-    end
-    
-    %figure('Name','Evaluated xFit');
-    %plot(xeval,zxeval);
-    %figure('Name','Evaluated yFit');
-    %plot(yeval,zyeval);
-    
-    fitx1D(k) = xeval(find(zxeval==max(zxeval)));
-    fity1D(k) = yeval(find(zyeval==max(zyeval)));
-    %fprintf('%u: x0=%u, y0=%u\r',k,fitx1D(k),fity1D(k));
-  end
-end
-
-figure;
-plot(fity1D);
-
-% Flatten the fity to prepare for global fitting
-rounds = 1;
-flaty1D = fity1D;
-if backward
-  for k = length(flaty1D):-1:2
-    if flaty1D(k-1)<flaty1D(k)
-      flaty1D(k-1) = flaty1D(k-1) + rounds*28;
-    end
-    if flaty1D(k-1)<flaty1D(k)
-      rounds = rounds + 1;
-      flaty1D(k-1) = flaty1D(k-1) + 28;
     end
   end
-else
-  for k = 2:1:length(flaty1D)
-    if flaty1D(k)<flaty1D(k-1)
-      flaty1D(k) = flaty1D(k) + rounds*28;
-    end
-    if flaty1D(k)<flaty1D(k-1)
-      rounds = rounds + 1;
-      flaty1D(k) = flaty1D(k) + 28;
-    end
-  end
-end
-figure;
-plot(flaty1D);
+  figure('Name','Evaluated Transaxial Fit flattened');
+  plot(flaty1D);
 
-%Fitting the global Values
-xfitx = (1:time)';
-yfity = (1:time)';
-fitGlobalx = fit(xfitx,fitx1D','poly3');
-fitGlobaly = fit(yfity,flaty1D','poly3');
-figure('Name','Global Fit X');
-plot(fitGlobalx,xfitx',fitx1D');
-figure('Name','Global Fit Y');
-plot(fitGlobaly,yfity',flaty1D');
-%Evaluating global Fit
-tevalx = (1:time);
-tevaly = (1:time);
-fitGlobalxeval= feval(fitGlobalx,tevalx);
-fitGlobalyeval= feval(fitGlobaly,tevaly);
+  %Fitting the global Values
+  teval = (1:time)';
+  fitGlobalx = fit(teval,fitx1D','poly3');
+  fitGlobaly = fit(teval,flaty1D','poly3');
+  figure('Name','Global Fit X');
+  plot(fitGlobalx,teval',fitx1D');
+  figure('Name','Global Fit Y');
+  plot(fitGlobaly,teval',flaty1D');
+  %Evaluating global Fit
+  fitGlobalxeval= feval(fitGlobalx,teval');
+  fitGlobalyeval= feval(fitGlobaly,teval');
+  
+  sinfity = flaty1D-fitGlobalyeval';
+  plot(sinfity);
 
-rounds = 1;
-for k = 1:length(fitGlobalyeval)
-  if fitGlobalyeval(k)>28
-    fitGlobalyeval(k) = fitGlobalyeval(k) - rounds*28;
-  end
-  if fitGlobalyeval(k)>28
-    rounds = rounds + 1;
-    fitGlobalyeval(k) = fitGlobalyeval(k) - 28;
-  end
-end
-  %cftool
-  %______________________________________________________
+  %rounds = 1;
+  %for k = 1:length(fitGlobalyeval)
+  %  if fitGlobalyeval(k)>28
+  %    fitGlobalyeval(k) = fitGlobalyeval(k) - rounds*28;
+  %  end
+  %  if fitGlobalyeval(k)>28
+  %    rounds = rounds + 1;
+  %    fitGlobalyeval(k) = fitGlobalyeval(k) - 28;
+  %  end
+  %end
 
   figure;
   BlockSinglesMovie = zeros(28,8);
@@ -478,25 +449,22 @@ end
         readPosition = readPosition + 1;
       end
     end
-    %v = [0,1000,2000,3000,4000,5000,6000,7000,8000,9000, ...
-    %    10000,11000,12000,13000,14000,15000,16000,17000, ...
-    %    18000,19000,20000];
     contourf(BlockSinglesMovie);
     %surf(BlockSinglesMovie);
-    %zlim([0 22000]);
+    %zlim([0 colorMax]);
     %zlabel('Bucket Singles Rate');
     %hold on;
     %imagesc(BlockSinglesMovie);
     %hold off;
     colormap(hot);
     legend(strcat('Time: ',num2str(k*2),' s'),'Location','North');
-    caxis([0 22000]);
+    caxis([0 colorMax]);
     c = colorbar;
     c.Label.String = 'Bucket Singles Rate';
     xlabel('Ring Number');
-    xlim([0 9])
+    xlim([0 9]);
     ylabel('Single-Bucket Number');
-    ylim([0 28])
+    ylim([0 28]);
     %hold on;
     %plot(newfitx(k), fity1D(k), 'c*', 'MarkerSize', 20, 'LineWidth', 3)
     if k <= time
