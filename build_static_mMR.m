@@ -34,26 +34,26 @@ xlabel('Time [s/10]');
 ylabel('Prompts per second');
 %findpeaks(temporalPromptDistribution,'Annotate','extents','WidthReference','halfheight');
 
+% ToDo:
+% Add a query for the user to enter the minima or alternatively
+% to load minima from a file
+
 % Cut the first X and the last Y ms of acquisition
-dlist = cutlmdata(dlist);
+[dlist,tstart,tstop] = cutlmdata(dlist);
 
 % Output detailed dead-time information and
 % Get TimeTag of SingleBuckets
 [singleBucketTimes,singleBuckets] = deadTimeInfo(dlist);
-difference = zeros((length(singleBucketTimes)-1),1);
-for i = 1:(length(singleBucketTimes)-1)
-  difference(i) = singleBucketTimes(i+1) - singleBucketTimes(i);
-end
-%***************************************************
-% ToDo: consider differences!!!
-%***************************************************
+
+% Transform PET-acquisition-time into Transmission-scan-time
+singleBucketTimes = singleBucketTimes - tstart;
+tstop = tstop - tstart;
 
 % Show Bucket-Single rates
-singleTime = length(singleBucketTimes);
-showBucketSingles(singleBuckets,singleTime);
+showBucketSingles(singleBuckets,singleBucketTimes,tstop);
 
 % Create Sinograms
-a=makeSino(cutdlist);
+makeSino(cutdlist);
 
 end
 
@@ -247,17 +247,17 @@ end
 
 % -------------------------------------------------------
 % Cut the first X and after Y ms of acquisition
-function cutdlist = cutlmdata(dlist)
+function [cutdlist,tstart,tstop] = cutlmdata(dlist)
   % Read values for X and Y
   promptx='Enter time in ms you want first cut:';
   prompty='Enter time in ms you want second cut:';
-  x=input(promptx);
-  y=input(prompty);
+  tstart=input(promptx);
+  tstop=input(prompty);
   
   % Convert time in [ms] to the format of a Ttag and search for
   % the corresponding position of the Ttag in dlist 
-  posx = find(dlist==(x+2^31));
-  posy = find(dlist==(y+2^31));
+  posx = find(dlist==(tstart+2^31));
+  posy = find(dlist==(tstop+2^31));
     
   % Create the cut data list
   cutdlist = dlist(posx:posy);
@@ -265,10 +265,10 @@ end
 
 % -------------------------------------------------------
 % Show single-bucket rates
-function showBucketSingles(BlockSingles,time)
+function showBucketSingles(BlockSingles,timeList,tstop)
+  timesteps = length(timeList);
   colorMax = floor(max(max(BlockSingles))/1000)*1000;
   figure();
-  %v = [0,3000,6000,9000,12000,14000,16000,17000,18000,19000,20000];
   contourf(BlockSingles,10);
   colormap(hot);
   caxis([0 colorMax]);
@@ -279,7 +279,7 @@ function showBucketSingles(BlockSingles,time)
   
   % Gaussian-Fit________________________________________
   backward = 0;
-  for k = 1:time
+  for k = 1:timesteps
     z = zeros(28,8);
     readPosition = 1;
     for i=1:8
@@ -298,8 +298,6 @@ function showBucketSingles(BlockSingles,time)
       fprintf('%u: Peak is too small for fitting!\r',k);
     else
       [izmax,jzmax] = find(z==zmax);
-      %nofitx(k) = izmax(1);
-      %nofity(k) = jzmax(1);
       if k==1 && jzmax(1)>6
         backward=1;
       end
@@ -381,8 +379,21 @@ function showBucketSingles(BlockSingles,time)
       fity1D(k) = yeval(find(zyeval==max(zyeval)));
     end
   end
-  figure('Name','Evaluated Transaxial Fit');
-  plot(fity1D);
+  % End Gaussian-Fit____________________________________
+  %figure('Name','Evaluated Transaxial Fit');
+  %plot(fity1D);
+  
+  %Add First and Last point do fity1D
+  timeList(timesteps+1) = tstop;
+  timeList(2:end+1)     = timeList;
+  timeList(1)           = 0;
+  fity1D(timesteps+1)   = 14.5;
+  fity1D(2:end+1)       = fity1D;
+  fity1D(1)             = 14.5;
+  
+  % ToDo:
+  % Calculate and add First and Last Point to fitx1D!
+  % Caluculation can be done using minlist
 
   % Flatten the fity to prepare for global fitting
   rounds = 1;
@@ -409,22 +420,34 @@ function showBucketSingles(BlockSingles,time)
     end
   end
   figure('Name','Evaluated Transaxial Fit flattened');
-  plot(flaty1D);
+  plot(timeList,flaty1D);
+  ylabel('Accumulated transaxial Bucket Number');
+  xlabel('Time [ms]');
 
-  %Fitting the global Values
-  teval = (1:time)';
-  fitGlobalx = fit(teval,fitx1D','poly3');
-  fitGlobaly = fit(teval,flaty1D','poly3');
+
+  % Global Fitting
+  fitGlobalx = fit(timeList',fitx1D','poly3');
+  fitGlobaly = fit(timeList',flaty1D','poly3');
   figure('Name','Global Fit X');
-  plot(fitGlobalx,teval',fitx1D');
+  plot(fitGlobalx,timeList,fitx1D');
   figure('Name','Global Fit Y');
-  plot(fitGlobaly,teval',flaty1D');
+  plot(fitGlobaly,timeList,flaty1D');
   %Evaluating global Fit
-  fitGlobalxeval= feval(fitGlobalx,teval');
-  fitGlobalyeval= feval(fitGlobaly,teval');
+  fitGlobalxeval= feval(fitGlobalx,timeList);
+  fitGlobalyeval= feval(fitGlobaly,timeList);
   
   sinfity = flaty1D-fitGlobalyeval';
-  plot(sinfity);
+  plot(timeList,sinfity);
+  xlabel('Time [ms]');
+  
+  restfity = zeros(1,length(timeList));
+  for i = 1:length(timeList)
+    restfity(i) = ... 1.612*sin((20./tstop*2*pi)*timeList(i) - tstop/40) + ...
+        0.834*sin(0.0001015*timeList(i)-1.232);
+  end
+  finalfity = sinfity-restfity;
+  plot(timeList,finalfity);
+  xlabel('Time [ms]');
 
   %rounds = 1;
   %for k = 1:length(fitGlobalyeval)
@@ -439,9 +462,9 @@ function showBucketSingles(BlockSingles,time)
 
   figure;
   BlockSinglesMovie = zeros(28,8);
-  F(time) = struct('cdata',[],'colormap',[]);
+  F(timesteps) = struct('cdata',[],'colormap',[]);
   %G(time) = struct('cdata',[],'colormap',[]);
-  for k=1:time
+  for k=1:timesteps
     readPosition = 1;
     for i=1:8
       for j=1:28
@@ -467,7 +490,7 @@ function showBucketSingles(BlockSingles,time)
     ylim([0 28]);
     %hold on;
     %plot(newfitx(k), fity1D(k), 'c*', 'MarkerSize', 20, 'LineWidth', 3)
-    if k <= time
+    if k <= timesteps
       hold on;
       plot(fitGlobalxeval(k), fity1D(k), 'b+', 'MarkerSize', 20, 'LineWidth', 3)
       hold off;
