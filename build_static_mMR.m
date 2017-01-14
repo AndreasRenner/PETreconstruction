@@ -34,23 +34,45 @@ xlabel('Time [s/10]');
 ylabel('Prompts per second');
 %findpeaks(temporalPromptDistribution,'Annotate','extents','WidthReference','halfheight');
 
-% ToDo:
-% Add a query for the user to enter the minima or alternatively
-% to load minima from a file
+% Query the user to enter the minima or alternatively
+% load minima from a file
+promptinit = 'Is there an existing list of Minima? [Y=1]';
+if input(promptinit)==1
+  load('minlist.mat');
+else
+  minlist=zeros(1,21);
+  for i=1:21
+    fprintf('%u. Minimum - ',i);
+    prompt='Enter time in ms:';
+    minlist(i)=input(prompt);
+  end
+  clear prompt;
+end
+clear promptinit;
+% For Min-List of Transmission-Scan
+minlist = minlist*1000 + 14300;
+
+figure('Name','Extracted Round-Times from Minima of Prompts/Second');
+plot(minlist);
+xlabel('Round Number');
+ylabel('Acquisition Time in [s]');
+
+rounds = (1:21);
+fitMinList = fit(rounds',minlist','poly1');
+evalFitMin = feval(fitMinList,rounds);
 
 % Cut the first X and the last Y ms of acquisition
-[dlist,tstart,tstop] = cutlmdata(dlist);
+[dlist] = cutlmdata(dlist,evalFitMin(1),evalFitMin(21));
 
 % Output detailed dead-time information and
 % Get TimeTag of SingleBuckets
 [singleBucketTimes,singleBuckets] = deadTimeInfo(dlist);
 
 % Transform PET-acquisition-time into Transmission-scan-time
-singleBucketTimes = singleBucketTimes - tstart;
-tstop = tstop - tstart;
+singleBucketTimes = singleBucketTimes - evalFitMin(1);
 
 % Show Bucket-Single rates
-showBucketSingles(singleBuckets,singleBucketTimes,tstop);
+showBucketSingles(singleBuckets,singleBucketTimes,evalFitMin);
 
 % Create Sinograms
 makeSino(cutdlist);
@@ -247,12 +269,12 @@ end
 
 % -------------------------------------------------------
 % Cut the first X and after Y ms of acquisition
-function [cutdlist,tstart,tstop] = cutlmdata(dlist)
+function cutdlist = cutlmdata(dlist,tstart,tstop)
   % Read values for X and Y
-  promptx='Enter time in ms you want first cut:';
-  prompty='Enter time in ms you want second cut:';
-  tstart=input(promptx);
-  tstop=input(prompty);
+  %promptx='Enter time in ms you want first cut:';
+  %prompty='Enter time in ms you want second cut:';
+  %tstart=input(promptx);
+  %tstop=input(prompty);
   
   % Convert time in [ms] to the format of a Ttag and search for
   % the corresponding position of the Ttag in dlist 
@@ -265,8 +287,12 @@ end
 
 % -------------------------------------------------------
 % Show single-bucket rates
-function showBucketSingles(BlockSingles,timeList,tstop)
+function showBucketSingles(BlockSingles,timeList,minlist)
   timesteps = length(timeList);
+  minlist = minlist-minlist(1);
+  tstop = minlist(21);
+  
+  % Show summary plot of Bucket-Singles
   colorMax = floor(max(max(BlockSingles))/1000)*1000;
   figure();
   contourf(BlockSingles,10);
