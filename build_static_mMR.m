@@ -39,6 +39,7 @@ ylabel('Prompts per second');
 promptinit = 'Is there an existing list of Minima? [Y=1]';
 if input(promptinit)==1
   load('minlist.mat');
+  %load('minlistBlanc.mat');
 else
   minlist=zeros(1,21);
   for i=1:21
@@ -49,13 +50,11 @@ else
   clear prompt;
 end
 clear promptinit;
-% For Min-List of Transmission-Scan
-minlist = minlist*1000 + 14300;
 
 figure('Name','Extracted Round-Times from Minima of Prompts/Second');
 plot(minlist);
 xlabel('Round Number');
-ylabel('Acquisition Time in [s]');
+ylabel('Acquisition Time in [ms]');
 
 rounds = (1:21);
 fitMinList = fit(rounds',minlist','poly1');
@@ -278,8 +277,8 @@ function cutdlist = cutlmdata(dlist,tstart,tstop)
   
   % Convert time in [ms] to the format of a Ttag and search for
   % the corresponding position of the Ttag in dlist 
-  posx = find(dlist==(tstart+2^31));
-  posy = find(dlist==(tstop+2^31));
+  posx = find(dlist==(int64(tstart)+2^31));
+  posy = find(dlist==(int64(tstop)+2^31));
     
   % Create the cut data list
   cutdlist = dlist(posx:posy);
@@ -410,12 +409,12 @@ function showBucketSingles(BlockSingles,timeList,minlist)
   %plot(fity1D);
   
   %Add First and Last point do fity1D
-  timeList(timesteps+1) = tstop;
-  timeList(2:end+1)     = timeList;
-  timeList(1)           = 0;
-  fity1D(timesteps+1)   = 14.5;
-  fity1D(2:end+1)       = fity1D;
-  fity1D(1)             = 14.5;
+  %timeList(timesteps+1) = tstop;
+  %timeList(2:end+1)     = timeList;
+  %timeList(1)           = 0;
+  %fity1D(timesteps+1)   = 14.5;
+  %fity1D(2:end+1)       = fity1D;
+  %fity1D(1)             = 14.5;
   
   % ToDo:
   % Calculate and add First and Last Point to fitx1D!
@@ -450,7 +449,6 @@ function showBucketSingles(BlockSingles,timeList,minlist)
   ylabel('Accumulated transaxial Bucket Number');
   xlabel('Time [ms]');
 
-
   % Global Fitting
   fitGlobalx = fit(timeList',fitx1D','poly3');
   fitGlobaly = fit(timeList',flaty1D','poly3');
@@ -461,30 +459,48 @@ function showBucketSingles(BlockSingles,timeList,minlist)
   %Evaluating global Fit
   fitGlobalxeval= feval(fitGlobalx,timeList);
   fitGlobalyeval= feval(fitGlobaly,timeList);
-  
+  %fitminyeval = feval(fitGlobaly,minlist);
+  %figure();
+  %plot(minlist,fitminyeval);
+  %taking into account gravitation
   sinfity = flaty1D-fitGlobalyeval';
   plot(timeList,sinfity);
   xlabel('Time [ms]');
-  
-  restfity = zeros(1,length(timeList));
-  for i = 1:length(timeList)
-    restfity(i) = ... 1.612*sin((20./tstop*2*pi)*timeList(i) - tstop/40) + ...
-        0.834*sin(0.0001015*timeList(i)-1.232);
+  fitGlobalSiny = fit(timeList',sinfity','sin2');
+  figure('Name','Global Sin Fit Y');
+  plot(fitGlobalSiny,timeList,sinfity');
+  fitsinyeval= feval(fitGlobalSiny,timeList);
+  figure();
+  plot(sinfity-fitsinyeval');
+  finalyfitflat = fitsinyeval'+fitGlobalyeval';
+  figure();
+  plot(timeList,finalyfitflat);
+  % Unflatten fity
+  rounds = 1;
+  finalyfit = finalyfitflat;
+  if backward
+    for k = (length(finalyfit)-1):-1:1
+      if finalyfit(k)>28
+        finalyfit(k) = finalyfit(k) - rounds*28;
+      end
+      if finalyfit(k)>28
+        rounds = rounds + 1;
+        finalyfit(k) = finalyfit(k) - 28;
+      end
+    end
+  else
+    for k = 2:length(finalyfit)
+      if finalyfit(k)>28
+        finalyfit(k) = finalyfit(k) - rounds*28;
+      end
+      if finalyfit(k)>28
+        rounds = rounds + 1;
+        finalyfit(k) = finalyfit(k) - 28;
+      end
+    end    
   end
-  finalfity = sinfity-restfity;
-  plot(timeList,finalfity);
-  xlabel('Time [ms]');
-
-  %rounds = 1;
-  %for k = 1:length(fitGlobalyeval)
-  %  if fitGlobalyeval(k)>28
-  %    fitGlobalyeval(k) = fitGlobalyeval(k) - rounds*28;
-  %  end
-  %  if fitGlobalyeval(k)>28
-  %    rounds = rounds + 1;
-  %    fitGlobalyeval(k) = fitGlobalyeval(k) - 28;
-  %  end
-  %end
+  figure();
+  plot(timeList,finalyfit);
 
   figure;
   BlockSinglesMovie = zeros(28,8);
@@ -506,7 +522,7 @@ function showBucketSingles(BlockSingles,timeList,minlist)
     %imagesc(BlockSinglesMovie);
     %hold off;
     colormap(hot);
-    legend(strcat('Time: ',num2str(k*2),' s'),'Location','North');
+    legend(strcat('Time: ',num2str(int64(timeList(k))),' ms'),'Location','North');
     caxis([0 colorMax]);
     c = colorbar;
     c.Label.String = 'Bucket Singles Rate';
@@ -518,7 +534,7 @@ function showBucketSingles(BlockSingles,timeList,minlist)
     %plot(newfitx(k), fity1D(k), 'c*', 'MarkerSize', 20, 'LineWidth', 3)
     if k <= timesteps
       hold on;
-      plot(fitGlobalxeval(k), fity1D(k), 'b+', 'MarkerSize', 20, 'LineWidth', 3)
+      plot(fitGlobalxeval(k), finalyfit(k), 'b+', 'MarkerSize', 20, 'LineWidth', 3)
       hold off;
     end
     drawnow
@@ -527,7 +543,7 @@ function showBucketSingles(BlockSingles,timeList,minlist)
   end
     
   fig = figure('Name', 'Unrolled Rings of Single-Buckets');
-  movie(fig,F,1,1)
+  movie(fig,F,1,10)
   %movie(fig,G,1,24)
 end
 
