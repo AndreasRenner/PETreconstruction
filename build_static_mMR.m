@@ -28,10 +28,6 @@ fprintf('Acquisition time: %u [ms]\r', acqTime);
 %   Transmission source is entering/leaving helical path
 acqTimeSec = floor(acqTime*0.01);
 temporalPromptDistribution = p_s(dlist,acqTimeSec);
-figure('Name','Temporal Distribution of Prompts');
-plot(temporalPromptDistribution);
-xlabel('Time [s/10]');
-ylabel('Prompts per second');
 %findpeaks(temporalPromptDistribution,'Annotate','extents','WidthReference','halfheight');
 
 % Query the user to enter the minima or alternatively
@@ -40,7 +36,28 @@ promptinit = 'Is there an existing list of Minima? [Y=1]';
 if input(promptinit)==1
   load('minlist.mat');
   %load('minlistBlanc.mat');
+  % Fit the data from minList
+  %___DEPRECATED___
+  %rounds = (1:21);
+  %fitMinList = fit(rounds',minlist','poly1');
+  %fitMinList = fit(rounds',minlist','poly4');
+  %evalFitMin = feval(fitMinList,rounds);
+  %checkfit = int64(evalFitMin/100);
+  %for i=1:21
+  %  y(i)=temporalPromptDistribution(checkfit(i));
+  %end
+  %figure('Name','Temporal Distribution of Prompts with Minima');
+  %plot(temporalPromptDistribution);
+  %xlabel('Time [s/10]');
+  %ylabel('Prompts per second');
+  %hold on;
+  %plot(checkfit,y,'o');
+  %hold off
 else
+  figure('Name','Temporal Distribution of Prompts');
+  plot(temporalPromptDistribution);
+  xlabel('Time [s/10]');
+  ylabel('Prompts per second');
   minlist=zeros(1,21);
   for i=1:21
     fprintf('%u. Minimum - ',i);
@@ -51,30 +68,29 @@ else
 end
 clear promptinit;
 
-figure('Name','Extracted Round-Times from Minima of Prompts/Second');
-plot(minlist);
-xlabel('Round Number');
-ylabel('Acquisition Time in [ms]');
-
-rounds = (1:21);
-fitMinList = fit(rounds',minlist','poly1');
-evalFitMin = feval(fitMinList,rounds);
+%figure('Name','Extracted Round-Times from Minima of Prompts/Second');
+%plot(minlist);
+%xlabel('Round Number');
+%ylabel('Acquisition Time in [ms]');
 
 % Cut the first X and the last Y ms of acquisition
-[dlist] = cutlmdata(dlist,evalFitMin(1),evalFitMin(21));
+[dlist] = cutlmdata(dlist,minlist(1),minlist(21));
 
 % Output detailed dead-time information and
 % Get TimeTag of SingleBuckets
 [singleBucketTimes,singleBuckets] = deadTimeInfo(dlist);
 
 % Transform PET-acquisition-time into Transmission-scan-time
-singleBucketTimes = singleBucketTimes - evalFitMin(1);
+singleBucketTimes = singleBucketTimes - minlist(1);
+fprintf('First Minimum of Prompts/s was at %u [ms]\n',minlist(1));
 
 % Show Bucket-Single rates
-showBucketSingles(singleBuckets,singleBucketTimes,evalFitMin);
+showBucketSingles(singleBuckets,singleBucketTimes,minlist);
 
 % Create Sinograms
-makeSino(cutdlist);
+makeSino(dlist);
+
+% sinoBlanc = importdata('sinoblanc.mat');
 
 end
 
@@ -235,9 +251,9 @@ end
 % Create Sinograms
 function makeSino(dlist)
   % Basic Parameters of Siemens Biograph mMR
-  Nbins   = 344;         % Number of radial bins
-  Nproj   = 252;         % Number of projections
-  Nplanes = 4084;        % Number of 3D sinogram planes
+  Nbins   = 344;         % Number of radial bins (NRAD)
+  Nproj   = 252;         % Number of projections (NANG)
+  Nplanes = 4084;        % Number of 3D sinogram planes (Nsinos)
   sinoDim = Nbins * Nproj * Nplanes;
   
   % Prompts between [001111...1] and [01111...1]
@@ -287,9 +303,14 @@ end
 % -------------------------------------------------------
 % Show single-bucket rates
 function showBucketSingles(BlockSingles,timeList,minlist)
+  % >>timeList<< contains the exat time in [ms] of the dead-time tag
+  % which is used to get information about Single-Buckets
+  % >>minlist<< contains the time in [ms] of each minimum
+  % in the ploted prompts/s over time -> corresponds to round-times
+  %   0 time is choosen to be the fitted first minimum
   timesteps = length(timeList);
+  % Transform PET-acquisition-time into Transmission-scan-time
   minlist = minlist-minlist(1);
-  tstop = minlist(21);
   
   % Show summary plot of Bucket-Singles
   colorMax = floor(max(max(BlockSingles))/1000)*1000;
@@ -354,12 +375,20 @@ function showBucketSingles(BlockSingles,timeList,minlist)
         izmax = izmax - 6;
       end
       z = z-zmin;
-      zx = z(izmax(1),:)';
-      zy = z(:,jzmax(1));
       x = (1:8)';
       y = (1:28)';
-      fitx = fit(x,zx,'gauss1');
-      fity = fit(y,zy,'gauss1','Exclude', zy<1000);
+      
+      % Use row/line of zmax for 1-D fit
+      %zx = z(izmax(1),:)';
+      %zy = z(:,jzmax(1));
+      %fitx = fit(x,zx,'gauss1');
+      %fity = fit(y,zy,'gauss1','Exclude', zy<1000);
+      
+      % Use sum of rows/lines for 1-D fit
+      rowsum  = sum(z,2);
+      linesum = sum(z);
+      fitx = fit(x,linesum','gauss1');
+      fity = fit(y,rowsum,'gauss1','Exclude', rowsum<5000);
 
       %Evaluate fit
       stepx = 1/32.2857;
