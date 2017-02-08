@@ -1,12 +1,14 @@
 function evaluateDeadTime()
 
-numberFiles = 30;
-results     = zeros(30,16);
+numberFiles     = 30;
+results         = zeros(30,15);
+scatterfraction = 0.13;
+randomF         = 20./588;
 % Description of Matrix Layout
-% 1   -2       -3      -4      -5      -6      -7    -8        -9
-% Time-Activity-A_Trans-A_Emiss-Prompts-Randoms-Trues-LostTally-TotalEvents
-% 10         -11        -12       -13      -14         -15         -16
-% CorPrompts -CorDelays -CorTrues -CorLost -LostEvents -RelCorLost -RelLost
+%-1    -2       -3      -4       -5       -6       -7       -8
+%-Time -Activity-A_Trans-A_Emiss -Prompts -Randoms -Scatter -Trues
+%-9         -10         -11         -12        -13       -14
+%-LostTally -TotalEvents-CorPrompts -CorDelays -CorTrues -LostEvents
 
 %_____________________________________________________
 % (1) Time (= Start-Time from DICOM Header + 30 s)
@@ -68,11 +70,17 @@ results(:,6)=[287150997,269762869,232609180,283969669,265965697,226957812, ...
               260293777,240906833,149211730,256735542,237219338,134660350];
 
 %_____________________________________________________
-% (7) Net. Trues (Prompts-Randoms)
-results(:,7)=results(:,5)-results(:,6);
+% (7) Scatter
+for i=1:numberFiles
+    results(:,7)=(results(:,5)-results(:,6))*scatterfraction;
+end
 
 %_____________________________________________________
-% (8,9) Dead-Time information (Lost Events and Total Events)
+% (8) Trues (Prompts-Randoms-Scatter)
+results(:,8)=results(:,5)-results(:,6)-results(:,7);
+
+%_____________________________________________________
+% (9,10) Dead-Time information (Lost Events and Total Events)
 for filenum=1:numberFiles
     filename = strcat(int2str(filenum), '.IMA');
     filesize=dir(filename);
@@ -105,61 +113,50 @@ for filenum=1:numberFiles
     
     clear dlist;
     
-    results(filenum,8)=LostEventsSecondLossyNode+LostEventsFirstLossyNode;
-    results(filenum,9)=millionEvents*1048575;
+    results(filenum,9)=LostEventsSecondLossyNode+LostEventsFirstLossyNode;
+    results(filenum,10)=millionEvents*1048575;
     
     % Output for user
     fprintf('Lost events "1. Lossy Node": %u\r',LostEventsFirstLossyNode);
     fprintf('Lost events "2. Lossy Node": %u\r',LostEventsSecondLossyNode);
-    fprintf('Total lost event packets: \t %u\r',results(filenum,8));
-    fprintf('Total initial events: \t %u\r\n',  results(filenum,9));
+    fprintf('Total lost event packets: \t %u\r',results(filenum,9));
+    fprintf('Total initial events: \t %u\r\n',  results(filenum,10));
 
 end
 
 %_____________________________________________________
 % Lost event tally correction [Jones2012]
-% (10) Corrected Prompts
+% (11) Corrected Prompts
 for i=1:numberFiles
-    results(i,10)=results(i,5)+results(i,5)*results(i,8)/results(i,9);
+    results(i,11)=results(i,5)+results(i,5)*results(i,9)/results(i,10);
 end
 
-% (11) Corrected Delays
+% (12) Corrected Delays
 for i=1:numberFiles
-    results(i,11)=results(i,6)+results(i,6)*results(i,8)/results(i,9);
+    results(i,12)=results(i,6)+results(i,6)*results(i,9)/results(i,10);
 end
 
-% (12) Corrected Trues
-results(:,12)=results(:,10)-results(:,11);
-
-% (13) Corrected Lost
-results(:,13)=results(:,9)-results(:,10)-results(:,11);
+% (13) Corrected Trues
+results(:,13)=results(:,11)-results(:,12);
 
 % (14) Lost Events
-results(:,14)=results(:,9)-results(:,5)-results(:,6);
+results(:,14)=results(:,10)-results(:,5)-results(:,6);
 
-% (15) Relative amount of Corrected Lost Events
+% (15) NEC
 for i=1:numberFiles
-    results(i,15)=results(i,13)/results(i,9);
+    results(i,15)=(results(i,8)*results(i,8)) ...
+        /(results(i,8)+2*randomF*results(i,6)+results(i,7));
 end
 
-% (16) Relative amount of Lost Events
-for i=1:numberFiles
-    results(i,16)=results(i,14)/results(i,9);
-end
-
-% (17) Relative amount of Random Events
-for i=1:numberFiles
-    results(i,17)=results(i,6)/results(i,5);
-end
-
-% (18) Relative amount of Corrected Randoms
-for i=1:numberFiles
-    results(i,18)=results(i,11)/results(i,10);
-end
-
+% (16) Relative amount of Corrected Randoms
+%for i=1:numberFiles
+%    results(i,16)=(results(i,5)+results(i,6))*0.15;
+%end
 
 fid=fopen('resultsnew.dat','w');
 fwrite(fid,results,'real*4');
+fid=fopen('resultsnew.dat','r');
+results = fread(fid,[30,15],'real*4');
 fclose(fid);
 
 sortResults = sortrows(results,2);
@@ -192,41 +189,57 @@ legend('Prompts','Randoms','Trues','Lost Events','Total Events', ...
     'Location','northwest');
 xlim([120,550]);
 
-% compare other losses with prompts/randoms/trues
-% (18) Relative amount of Corrected Randoms
-for i=1:numberFiles
-    sortResults(i,19)=(sortResults(i,5)+sortResults(i,6))*0.15;
-end
+% show NEC curve
 figure();
 h = stem(sortResults(:,2), [sortResults(:,5),sortResults(:,6),sortResults(:,7), ...
-    (sortResults(:,9)-sortResults(:,8)-sortResults(:,6)-sortResults(:,5)), ...
-    sortResults(:,19)],'filled', 'LineStyle', 'none');
+    sortResults(:,8),sortResults(:,15)],'filled', 'LineStyle', 'none');
 xlabel('Activity [MBq]');
 ylabel('Counts');
-legend('Prompts','Randoms','Trues','Other losses','Total Events*0.15', ...
+h(1).Marker = '*';
+h(2).Marker = '*';
+h(3).Marker = '*';
+h(4).Marker = '*';
+h(5).Marker = 'o';
+legend('Prompts','Randoms','Scatter','Trues','NEC', ...
     'Location','northeast');
 xlim([120,550]);
-ylim([0,800000000])
+ylim([0,500000000])
 
-% show results vs. corrected results for prompt/random/true
+% show NEC curve
 figure();
-k = stem(sortResults(:,2), [sortResults(:,5),sortResults(:,6),sortResults(:,7), ...
-    sortResults(:,10),sortResults(:,11),sortResults(:,12)], ...
-    'filled', 'LineStyle', 'none');
-k(1).Marker = 'square';
-k(2).Marker = 'square';
-k(3).Marker = 'square';
-k(4).Marker = '+';
-k(5).Marker = '+';
-k(6).Marker = '+';
-k(4).Color = k(1).Color;
-k(5).Color = k(2).Color;
-k(6).Color = k(3).Color;
+h = plot(sortResults(:,2), [sortResults(:,6),sortResults(:,8), ...
+    sortResults(:,15)]);
 xlabel('Activity [MBq]');
 ylabel('Counts');
-legend('Prompts','Randoms','Trues','Prompts Corr','Randoms Corr','Trues Corr', ...
-   'Location','northwest');
-ylim([100000000,700000000])
+h(1).Marker = '*';
+h(2).Marker = '+';
+h(3).Marker = 'o';
+h(1).LineStyle = '--';
+h(2).LineStyle = ':';
+legend('Randoms','Trues','NEC', ...
+    'Location','northwest');
+xlim([120,410]);
+ylim([90000000,290000000]);
+
+% show results vs. corrected results for prompt/random/true
+%figure();
+%k = stem(sortResults(:,2), [sortResults(:,5),sortResults(:,6),sortResults(:,7), ...
+%    sortResults(:,10),sortResults(:,11),sortResults(:,12)], ...
+%    'filled', 'LineStyle', 'none');
+%k(1).Marker = 'square';
+%k(2).Marker = 'square';
+%k(3).Marker = 'square';
+%k(4).Marker = '+';
+%k(5).Marker = '+';
+%k(6).Marker = '+';
+%k(4).Color = k(1).Color;
+%k(5).Color = k(2).Color;
+%k(6).Color = k(3).Color;
+%xlabel('Activity [MBq]');
+%ylabel('Counts');
+%legend('Prompts','Randoms','Trues','Prompts Corr','Randoms Corr','Trues Corr', ...
+%   'Location','northwest');
+%ylim([100000000,700000000])
 
 %remove Syringe1 from data
 %result12=results;
