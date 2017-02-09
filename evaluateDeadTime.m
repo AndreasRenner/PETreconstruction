@@ -142,10 +142,16 @@ results(:,13)=results(:,11)-results(:,12);
 % (14) Lost Events
 results(:,14)=results(:,10)-results(:,5)-results(:,6);
 
-% (15) NEC
+% (15) NEC (-> Dahlbom2005)
 for i=1:numberFiles
     results(i,15)=(results(i,8)*results(i,8)) ...
         /(results(i,8)+2*randomF*results(i,6)+results(i,7));
+end
+% (15) NEC (-> Bailey2003)
+for i=1:numberFiles
+    results(i,15)=(results(i,5)*(results(i,8)/(results(i,8)+results(i,7)))) ...
+        *(results(i,5)*(results(i,8)/(results(i,8)+results(i,7)))) ...
+        /(results(i,5)+2*randomF*results(i,6));
 end
 
 % (16) Relative amount of Corrected Randoms
@@ -219,7 +225,7 @@ h(2).LineStyle = ':';
 legend('Randoms','Trues','NEC', ...
     'Location','northwest');
 xlim([120,410]);
-ylim([90000000,290000000]);
+ylim([0,290000000]);
 
 % show results vs. corrected results for prompt/random/true
 %figure();
