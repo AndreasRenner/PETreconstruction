@@ -254,6 +254,11 @@ function makeSino(dlist)
   Nbins   = 344;         % Number of radial bins (NRAD)
   Nproj   = 252;         % Number of projections (NANG)
   Nplanes = 4084;        % Number of 3D sinogram planes (Nsinos)
+  % The Sinogram is arranged in 121 Segments; the first Segment consists of
+  % the 64 direct planes, 2nd and 3rd Segment of 63 planes each for +1 and
+  % -1 rings and so on; last and second-last Segment consist of 4 planes
+  % each as the maximum ring difference is 60; this sums up to a total of
+  % 4084 planes.
   sinoDim = Nbins * Nproj * Nplanes;
   
   % Prompts between [001111...1] and [01111...1]
