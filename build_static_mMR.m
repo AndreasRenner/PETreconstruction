@@ -254,13 +254,17 @@ function makeSino(dlist)
   Nbins   = 344;         % Number of radial bins (NRAD)
   Nproj   = 252;         % Number of projections (NANG)
   Nplanes = 4084;        % Number of 3D sinogram planes (Nsinos)
+  Nseg    = 121;         % Number of segments
+  Nrings  = 64;          % Number of Detector-Rings
+  Nslices = 127;         % Number of slices (2*Nrings -1)
   % The Sinogram is arranged in 121 Segments; the first Segment consists of
   % the 64 direct planes, 2nd and 3rd Segment of 63 planes each for +1 and
   % -1 rings and so on; last and second-last Segment consist of 4 planes
   % each as the maximum ring difference is 60; this sums up to a total of
   % 4084 planes.
   sinoDim = Nbins * Nproj * Nplanes;
-  
+  Span    = 1;
+
   % Prompts between [001111...1] and [01111...1]
   ptag = dlist(find((dlist<2^31)&(dlist>=2^30)));
   % Randoms lower or equal [001111...1]
@@ -276,9 +280,79 @@ function makeSino(dlist)
   sino=accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
     
   % write sinograms to file
-  sinogramname = strcat('sinogram_static_', filename, '.raw');
+  sinogramname = strcat('sino_static_', filename, '.raw');
   fid=fopen(sinogramname,'w');
   fwrite(fid,uint16(sino),'uint16');
+  fclose(fid);
+  
+  % SSRB Algorithm: creates a rebinned direct sinogram  
+  SSRBSino = zeros(Nbins,Nproj,Nslices,'double');
+  % INCLINATION of each segment
+  Offset(1)=0;
+  Offset(2)=(Span+1)/2;
+  Offset(3)=(Span+1)/2;
+  for iseg=4:Nseg
+    Offset(iseg)=Offset(iseg-2)+Span;
+  end
+  % Number of sinograms in each segment
+  Nsinos=0;
+  for iseg=1:Nseg
+    NsinoSeg(iseg)=Nrings-Offset(iseg);
+    Nsinos=Nsinos+NsinoSeg(iseg);
+  end
+
+  fid=fopen(sinogramname,'r');
+  Nsino=0;
+  for iseg=1:Nseg
+    for k=1:NsinoSeg(iseg)
+      Nsino  = Nsino+1;
+      Sino2D = fread(fid, [Nbins, Nproj], '*int16');
+      k_SSRB = (2*k-1) + Offset(iseg);
+      SIN2D  = double(Sino2D); 
+      SSRBSino(:,:,k_SSRB)=SSRBSino(:,:,k_SSRB)+SIN2D; 
+    end
+  end
+  fclose(fid);
+  
+  SINR = double(SSRBSino);
+  
+  % Gaps Finder and Gap Filling (using inpaint)
+  MASK = zeros(Nbins,Nproj);
+  for k=1:Nslices
+    MASK = MASK + SINR(:,:,k); 
+  end
+  
+  ngap=0;
+  nnogap=0;
+  for ith=1:Nproj
+    for ir=1:Nbins
+      if (MASK(ir,ith)<0.01)     
+        ngap=ngap+1;    
+        MASK(ir,ith)=0.0;
+      else
+        nnogap=nnogap+1; 
+        MASK(ir,ith)=1.0;
+      end
+    end
+  end
+  
+  for k=1:Nslices
+    SIN=SINR(:,:,k);
+    SIN(MASK==0.)=nan;
+    SIN2=inpaint_nans(SIN,2);
+    SSRBSino(:,:,k)=SIN2;
+  end
+
+  for iang=1:Nproj
+    for k=1:Nslices
+      for irad=1:Nbins
+        STIR_proj(irad,k,iang)=SSRBSino(irad,iang,k);
+      end
+    end
+  end
+
+  fid = fopen('STIR_sinogram.s', 'w');
+  fwrite(fid,STIR_proj,'float32');
   fclose(fid);
 
   % Output for user
