@@ -34,8 +34,8 @@ temporalPromptDistribution = p_s(dlist,acqTimeSec);
 % load minima from a file
 promptinit = 'Is there an existing list of Minima? [Y=1]';
 if input(promptinit)==1
-  load('minlist.mat');
-  %load('minlistBlanc.mat');
+  %load('minlist.mat');
+  load('minlistBlanc.mat');
   % Fit the data from minList
   %___DEPRECATED___
   %rounds = (1:21);
@@ -88,7 +88,7 @@ fprintf('First Minimum of Prompts/s was at %u [ms]\n',minlist(1));
 showBucketSingles(singleBuckets,singleBucketTimes,minlist);
 
 % Create Sinograms
-makeSino(dlist);
+makeSino(dlist,filename);
 
 % sinoBlanc = importdata('sinoblanc.mat');
 
@@ -249,7 +249,7 @@ end
 
 % -------------------------------------------------------
 % Create Sinograms
-function makeSino(dlist)
+function makeSino(dlist,filename)
   % Basic Parameters of Siemens Biograph mMR
   Nbins   = 344;         % Number of radial bins (NRAD)
   Nproj   = 252;         % Number of projections (NANG)
@@ -304,10 +304,10 @@ function makeSino(dlist)
   fid=fopen(sinogramname,'r');
   Nsino=0;
   for iseg=1:Nseg
-    for k=1:NsinoSeg(iseg)
+    for u=1:NsinoSeg(iseg)
       Nsino  = Nsino+1;
       Sino2D = fread(fid, [Nbins, Nproj], '*int16');
-      k_SSRB = (2*k-1) + Offset(iseg);
+      k_SSRB = (2*u-1) + Offset(iseg);
       SIN2D  = double(Sino2D); 
       SSRBSino(:,:,k_SSRB)=SSRBSino(:,:,k_SSRB)+SIN2D; 
     end
@@ -318,8 +318,8 @@ function makeSino(dlist)
   
   % Gaps Finder and Gap Filling (using inpaint)
   MASK = zeros(Nbins,Nproj);
-  for k=1:Nslices
-    MASK = MASK + SINR(:,:,k); 
+  for u=1:Nslices
+    MASK = MASK + SINR(:,:,u); 
   end
   
   ngap=0;
@@ -336,20 +336,52 @@ function makeSino(dlist)
     end
   end
   
-  for k=1:Nslices
-    SIN=SINR(:,:,k);
+  for u=1:Nslices
+    SIN=SINR(:,:,u);
     SIN(MASK==0.)=nan;
     SIN2=inpaint_nans(SIN,2);
-    SSRBSino(:,:,k)=SIN2;
+    SSRBSino(:,:,u)=SIN2;
   end
+  
+  % Smooth 3D data with gaussian kernel
+  %SSRBSino = smooth3(SSRBSino,'gaussian',[3 3 3],0.42466); % sd correlates
+  %to FWHM of 1
+  SSRBSino = smooth3(SSRBSino,'gaussian',[5 5 5],1.5);
+  
+  newName = 'SinoRatioCutSmoothThres.raw';
+  fid = fopen(newName,'w');
+  fwrite(fid,SSRBratio,'float32');
+  fclose(fid);
 
-  for iang=1:Nproj
-    for k=1:Nslices
-      for irad=1:Nbins
-        STIR_proj(irad,k,iang)=SSRBSino(irad,iang,k);
+  for u=1:Nslices
+    for v=1:Nproj
+      for w=1:Nbins
+        STIR_proj(w,u,v)=SSRBSino(w,v,u);
       end
     end
   end
+  
+  for u=1:Nslices
+    for v=1:Nproj
+      for w=1:Nbins
+        if SSRBBlancCutSmooth(w,v,u)<4 && SSRBTransCutSmooth(w,v,u)<0.8
+          SSRBratio(w,v,u)=SSRBBlancCutSmooth(w,v,u);
+        else
+          SSRBratio(w,v,u)= ...
+          SSRBBlancCutSmooth(w,v,u)./SSRBTransCutSmooth(w,v,u);
+        end
+      end
+    end
+  end
+  
+  theta = 180./Nproj;
+  for i=1:Nslices
+    recon(:,:,i)=iradon(SSRBratio(:,:,i),theta);
+  end
+  fid = fopen('reconRatio.raw', 'w');
+  fwrite(fid,recon,'float32');
+  fclose(fid);
+
 
   fid = fopen('STIR_sinogram.s', 'w');
   fwrite(fid,STIR_proj,'float32');
