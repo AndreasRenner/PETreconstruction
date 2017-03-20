@@ -1,99 +1,103 @@
-function build_static_mMR(filename)
-
-% Choose the file from an UI
-%[filename, path]=uigetfile('*.*');
-%cd(path);
-% Get the Number of Counts (Ncs) from the size of the file
-%cd('/home/andreas/data/PET_raw_data_20160603');
-
+function build_static_mMR(filenameBlanc, filenameTrans)
 % Estimate Number of Tags from Filesize
-filesize = dir(filename);
-Ncs      = ceil(filesize.bytes/4);
-clear filesize;
-fprintf('Estimated Number of Tags: \t %10.0f\r\n', Ncs);
+sizeBlanc = dir(filenameBlanc);
+sizeTrans = dir(filenameTrans);
+NcsBlanc  = ceil(sizeBlanc.bytes/4);
+NcsTrans  = ceil(sizeTrans.bytes/4);
+clear sizeBlanc sizeTrans;
+fprintf('BlancScan - Number of Tags: \t %10.0f\r',   NcsBlanc);
+fprintf('TransScan - Number of Tags: \t %10.0f\r\n', NcsTrans);
 
-% Read File into a List
-fid   = fopen(filename,'r');
-dlist = fread(fid,[Ncs],'uint32');    
-fclose(fid);
-clear fid;
-%cd('/home/andreas/code/PETreconstruction');
-
+% B L A N C - S C A N :
+% Read Files into a List
+fidB   = fopen(filenameBlanc,'r');
+dlistB = fread(fidB,[NcsBlanc],'uint32'); 
+fclose(fidB); clear fidB;
+%
 % Get acquisition time in ms and output frequency of Tags
-acqTime = tagFrequency(dlist);
-fprintf('Acquisition time: %u [ms]\r', acqTime);
-
-% Output prompts per second/10
-% ->Output should be used to determine the time when
-%   Transmission source is entering/leaving helical path
-acqTimeSec = floor(acqTime*0.01);
-temporalPromptDistribution = p_s(dlist,acqTimeSec);
-%findpeaks(temporalPromptDistribution,'Annotate','extents','WidthReference','halfheight');
-
-% Query the user to enter the minima or alternatively
-% load minima from a file
-promptinit = 'Is there an existing list of Minima? [Y=1]';
-if input(promptinit)==1
-  %load('minlist.mat');
+acqTimeB = tagFrequency(dlistB);
+fprintf('BlancScan - Acquisition time: %u [ms]\r', acqTimeB);
+%
+% Load minima from file or querry user to enter minima
+try
   load('minlistBlanc.mat');
-  % Fit the data from minList
-  %___DEPRECATED___
-  %rounds = (1:21);
-  %fitMinList = fit(rounds',minlist','poly1');
-  %fitMinList = fit(rounds',minlist','poly4');
-  %evalFitMin = feval(fitMinList,rounds);
-  %checkfit = int64(evalFitMin/100);
-  %for i=1:21
-  %  y(i)=temporalPromptDistribution(checkfit(i));
-  %end
-  %figure('Name','Temporal Distribution of Prompts with Minima');
-  %plot(temporalPromptDistribution);
-  %xlabel('Time [s/10]');
-  %ylabel('Prompts per second');
-  %hold on;
-  %plot(checkfit,y,'o');
-  %hold off
-else
-  figure('Name','Temporal Distribution of Prompts');
-  plot(temporalPromptDistribution);
-  xlabel('Time [s/10]');
-  ylabel('Prompts per second');
-  minlist=zeros(1,21);
-  for i=1:21
-    fprintf('%u. Minimum - ',i);
-    prompt='Enter time in ms:';
-    minlist(i)=input(prompt);
+catch ME
+  if (strcmp(ME.identifier,'MATLAB:load:couldNotReadFile'))
+    warning('Did not find >>minlistBlanc.mat<<. Enter Minima manually.');
+    % Output prompts per second/10
+    % ->Output should be used to determine the time when
+    %   Transmission source is entering/leaving helical path
+    acqTimeSecB = floor(acqTimeB*0.01);
+    temporalPromptDistributionB = p_s(dlistB,acqTimeSecB);
+    %findpeaks(temporalPromptDistribution,'Annotate','extents','WidthReference','halfheight');
+    figure('Name','BlancScan: Temporal Distribution of Prompts');
+    plot(temporalPromptDistributionB);
+    xlabel('Time [s/10]');
+    ylabel('Prompts per second');
+    minlistBlanc=zeros(1,21);
+    for i=1:21
+      fprintf('%u. Minimum - ',i);
+      prompt='Enter time in ms:';
+      minlistBlanc(i)=input(prompt);
+    end
+    clear prompt;
+  else
+    rethrow(ME)
   end
-  clear prompt;
 end
-clear promptinit;
-
-%figure('Name','Extracted Round-Times from Minima of Prompts/Second');
-%plot(minlist);
-%xlabel('Round Number');
-%ylabel('Acquisition Time in [ms]');
-
+%
 % Cut the first X and the last Y ms of acquisition
-[dlist] = cutlmdata(dlist,minlist(1),minlist(21));
-
-% Output detailed dead-time information and
-% Get TimeTag of SingleBuckets
-[singleBucketTimes,singleBuckets] = deadTimeInfo(dlist);
-
-% Transform PET-acquisition-time into Transmission-scan-time
-singleBucketTimes = singleBucketTimes - minlist(1);
-fprintf('First Minimum of Prompts/s was at %u [ms]\n',minlist(1));
-
-% Show Bucket-Single rates
-showBucketSingles(singleBuckets,singleBucketTimes,minlist);
-
+[dlistB] = cutlmdata(dlistB,minlistBlanc(1),minlistBlanc(21));
+%
 % Create Sinograms
-makeSino(dlist,filename);
+SSRB_Blanc = makeSino(dlistB,filenameBlanc);
+clear dlistB;
 
-% sinoBlanc = importdata('sinoblanc.mat');
-
+% T R A N S - S C A N
+% Read Files into a List
+fidT   = fopen(filenameTrans,'r'); 
+dlistT = fread(fidT,[NcsTrans],'uint32');    
+fclose(fidT); clear fidT;
+%
+% Get acquisition time in ms and output frequency of Tags
+acqTimeT = tagFrequency(dlistT);
+fprintf('TransScan - Acquisition time: %u [ms]\r', acqTimeT);
+%
+% Load minima from file or querry user to enter minima
+try
+  load('minlistTrans.mat');
+catch ME
+  if (strcmp(ME.identifier,'MATLAB:load:couldNotReadFile'))
+    warning('Did not find >>minlistTrans.mat<<. Enter Minima manually.');
+    % Output prompts per second/10
+    acqTimeSecT = floor(acqTimeT*0.01);
+    temporalPromptDistributionT = p_s(dlistT,acqTimeSecT);
+    figure('Name','TransScan: Temporal Distribution of Prompts');
+    plot(temporalPromptDistributionT);
+    xlabel('Time [s/10]');
+    ylabel('Prompts per second');
+    minlistTrans=zeros(1,21);
+    for i=1:21
+      fprintf('%u. Minimum - ',i);
+      prompt='Enter time in ms:';
+      minlistTrans(i)=input(prompt);
+    end
+    clear prompt;
+  else
+    rethrow(ME)
+  end
 end
+%
+% Cut the first X and the last Y ms of acquisition
+[dlistT] = cutlmdata(dlistT,minlistTrans(1),minlistTrans(21));
+%
+% Create Sinograms
+SSRB_Trans = makeSino(dlistT,filenameTrans);
+clear dlistT;
 
+% Calculate and reconstruc ratio of Blank- to Transmission-Scan
+reconSinoRatio(SSRB_Blanc,SSRB_Trans);
+end
 
 % -------------------------------------------------------
 % Get frequency of all individual Tags
@@ -151,7 +155,7 @@ function duration = tagFrequency(dlist)
       %fprintf('Pos %u\tat %s ms:\tControl Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));     
     end
   end
-  
+  clear dlist;
   if specialTagCounter==0
     fprintf('None\r');
   end
@@ -197,59 +201,28 @@ function [z] = p_s(dlist,time)
     end
   end
 end
-    
+
 % -------------------------------------------------------
-% Get Single-Buckets and output detailed dead-time information
-function [singleBucket,blockSingles] = deadTimeInfo(dlist)
-  D=0;
-  bucketRounds = 1;
-  LostEventsFirstLossyNode=0;
-  LostEventsSecondLossyNode=0;
-  millionEvents=0;
-  for i=1:length(dlist)
-    if (dlist(i)>=(2^31))&&(dlist(i)<2684354560)
-      % Time Tag
-      Ttag=num2str(dlist(i)-2^31);
-    elseif (dlist(i)>=2684354560)&&(dlist(i)<3221225472)
-      % Dead-Time Tag
-      D=D+1;
-      binaryTag=num2str(dec2bin(dlist(i)));
-      typefield=bin2dec(binaryTag(4:6));
-      if typefield==7
-        loss=bin2dec(binaryTag(13:32));
-        LostEventsFirstLossyNode=LostEventsFirstLossyNode+loss;
-        millionEvents=millionEvents+1;
-        %fprintf('1. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
-      elseif typefield==6
-        loss=bin2dec(binaryTag(13:32));
-        LostEventsSecondLossyNode=LostEventsSecondLossyNode+loss;
-        millionEvents=millionEvents+1;
-        %fprintf('2. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
-      else
-        blocknum=bin2dec(binaryTag(4:13));
-        singles=bin2dec(binaryTag(14:32));        
-        blockSingles(bucketRounds,blocknum+1) = singles;
-        %fprintf('Block: %u\tSingles: %u\t Time[ms]: %s\r',blocknum,singles,Ttag);
-        if blocknum == 223
-          singleBucket(bucketRounds) = str2num(Ttag);
-          bucketRounds = bucketRounds + 1;
-        end
-      end
-    end
-  end
-  totalLoss=LostEventsSecondLossyNode+LostEventsFirstLossyNode;
-  totalEvents=millionEvents*1048575;
-  % 1048575 corresponds to the 20 bit ,,lost event tally field''
-  fprintf('Total Dead-time marks: %u\r',D);
-  fprintf('Number of lost events inserted by the "1. Lossy Node": %u\r', LostEventsFirstLossyNode);
-  fprintf('Number of lost events inserted by the "2. Lossy Node": %u\r', LostEventsSecondLossyNode);
-  fprintf('Total number of lost event packets: \t %u\r', totalLoss);
-  fprintf('Total number of initial events: \t~%u\r', totalEvents);
+% Cut the first X and after Y ms of acquisition
+function cutdlist = cutlmdata(dlist,tstart,tstop)
+  % Read values for X and Y
+  %promptx='Enter time in ms you want first cut:';
+  %prompty='Enter time in ms you want second cut:';
+  %tstart=input(promptx);
+  %tstop=input(prompty);
+  
+  % Convert time in [ms] to the format of a Ttag and search for
+  % the corresponding position of the Ttag in dlist 
+  posx = find(dlist==(int64(tstart)+2^31));
+  posy = find(dlist==(int64(tstop)+2^31));
+    
+  % Create the cut data list
+  cutdlist = dlist(posx:posy);
 end
 
 % -------------------------------------------------------
 % Create Sinograms
-function makeSino(dlist,filename)
+function [SSRBSino] = makeSino(dlist,filename)
   % Basic Parameters of Siemens Biograph mMR
   Nbins   = 344;         % Number of radial bins (NRAD)
   Nproj   = 252;         % Number of projections (NANG)
@@ -269,6 +242,7 @@ function makeSino(dlist,filename)
   ptag = dlist(find((dlist<2^31)&(dlist>=2^30)));
   % Randoms lower or equal [001111...1]
   rtag = dlist(find((dlist<2^30)));
+  clear dlist;
 
   % remove preceding tag if necessary
   ptag = ptag-(2^30);
@@ -277,10 +251,11 @@ function makeSino(dlist,filename)
   rtag = rtag((rtag<=sinoDim)&(rtag>0));    
 
   % build sinograms
-  sino=accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
-    
+  sino = accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
+  clear ptag rtag;
+  
   % write sinograms to file
-  sinogramname = strcat('sino_static_', filename, '.raw');
+  sinogramname = strcat('sino_', filename, '.raw');
   fid=fopen(sinogramname,'w');
   fwrite(fid,uint16(sino),'uint16');
   fclose(fid);
@@ -348,9 +323,9 @@ function makeSino(dlist,filename)
   %to FWHM of 1
   SSRBSino = smooth3(SSRBSino,'gaussian',[5 5 5],1.5);
   
-  newName = 'SinoRatioCutSmoothThres.raw';
+  newName = strcat('sino_SSRB_', filename, '.raw');
   fid = fopen(newName,'w');
-  fwrite(fid,SSRBratio,'float32');
+  fwrite(fid,SSRBSino,'float32');
   fclose(fid);
 
   for u=1:Nslices
@@ -360,330 +335,33 @@ function makeSino(dlist,filename)
       end
     end
   end
-  
-  for u=1:Nslices
-    for v=1:Nproj
-      for w=1:Nbins
-        if SSRBBlancCutSmooth(w,v,u)<4 && SSRBTransCutSmooth(w,v,u)<0.8
-          SSRBratio(w,v,u)=SSRBBlancCutSmooth(w,v,u);
-        else
-          SSRBratio(w,v,u)= ...
-          SSRBBlancCutSmooth(w,v,u)./SSRBTransCutSmooth(w,v,u);
-        end
-      end
-    end
-  end
-  
-  theta = 180./Nproj;
-  for i=1:Nslices
-    recon(:,:,i)=iradon(SSRBratio(:,:,i),theta);
-  end
-  fid = fopen('reconRatio.raw', 'w');
-  fwrite(fid,recon,'float32');
-  fclose(fid);
-
 
   fid = fopen('STIR_sinogram.s', 'w');
   fwrite(fid,STIR_proj,'float32');
   fclose(fid);
-
-  % Output for user
-  fprintf('Finished reading list file\r\n');
-  fprintf('Prompts\t\t:\t%s\r',num2str(length(ptag)));
-  fprintf('Randoms\t\t:\t%s\r',num2str(length(rtag)));
 end
 
 % -------------------------------------------------------
-% Cut the first X and after Y ms of acquisition
-function cutdlist = cutlmdata(dlist,tstart,tstop)
-  % Read values for X and Y
-  %promptx='Enter time in ms you want first cut:';
-  %prompty='Enter time in ms you want second cut:';
-  %tstart=input(promptx);
-  %tstop=input(prompty);
+% Reconstruct ratio between Blanc- and Transmission-Scan
+function reconSinoRatio(SSRB_Blanc,SSRB_Trans)
+  for u=1:size(SSRB_Blanc,1)
+    for v=1:size(SSRB_Blanc,2)
+      for w=1:size(SSRB_Blanc,3)
+        if SSRB_Blanc(u,v,w)<4 && SSRB_Trans(u,v,w)<0.8
+          SSRB_Ratio(u,v,w)=SSRB_Blanc(u,v,w);
+        else
+          SSRB_Ratio(u,v,w)=SSRB_Blanc(u,v,w)./SSRB_Trans(u,v,w);
+        end
+      end
+    end
+  end
   
-  % Convert time in [ms] to the format of a Ttag and search for
-  % the corresponding position of the Ttag in dlist 
-  posx = find(dlist==(int64(tstart)+2^31));
-  posy = find(dlist==(int64(tstop)+2^31));
-    
-  % Create the cut data list
-  cutdlist = dlist(posx:posy);
+  theta = 180./size(SSRB_Blanc,2);
+  for i=1:size(SSRB_Blanc,3)
+    recon(:,:,i)=iradon(SSRB_Ratio(:,:,i),theta);
+  end
+  
+  fid = fopen('reconRatio.raw', 'w');
+  fwrite(fid,recon,'float32');
+  fclose(fid);
 end
-
-% -------------------------------------------------------
-% Show single-bucket rates
-function showBucketSingles(BlockSingles,timeList,minlist)
-  % >>timeList<< contains the exat time in [ms] of the dead-time tag
-  % which is used to get information about Single-Buckets
-  % >>minlist<< contains the time in [ms] of each minimum
-  % in the ploted prompts/s over time -> corresponds to round-times
-  %   0 time is choosen to be the fitted first minimum
-  timesteps = length(timeList);
-  % Transform PET-acquisition-time into Transmission-scan-time
-  minlist = minlist-minlist(1);
-  
-  % Show summary plot of Bucket-Singles
-  colorMax = floor(max(max(BlockSingles))/1000)*1000;
-  figure();
-  contourf(BlockSingles,10);
-  colormap(hot);
-  caxis([0 colorMax]);
-  c = colorbar;
-  c.Label.String = 'Bucket Singles Rate';
-  ylabel('Ring Number');
-  xlabel('Time [s]');
-  
-  % Gaussian-Fit________________________________________
-  backward = 0;
-  for k = 1:timesteps
-    z = zeros(28,8);
-    readPosition = 1;
-    for i=1:8
-      for j=1:28
-        z(j,i) = BlockSingles(k,readPosition);
-        readPosition = readPosition + 1;
-      end
-    end
-    %figure('Name', 'Initial Distribution of Single-Rates');
-    %imagesc(z);
-    zmin = min(min(z));
-    zmax = max(max(z));
-    downshift=0;
-    upshift=0;
-    if (zmax-zmin)<1000
-      fprintf('%u: Peak is too small for fitting!\r',k);
-    else
-      [izmax,jzmax] = find(z==zmax);
-      if k==1 && jzmax(1)>6
-        backward=1;
-      end
-      if izmax<7
-        temp = zeros(28,8);
-        for i=1:22
-          temp((i+6),:)=z(i,:);
-        end
-        for i=23:1:28
-          temp((i-22),:)=z(i,:);
-        end
-        %figure('Name', 'Upshifted Distribution of Single-Rates');
-        %imagesc(temp);
-        z = temp;
-        upshift=1;
-        izmax = izmax + 6;
-      elseif izmax>21
-        temp = zeros(28,8);
-        for i=1:6
-          temp((i+22),:)=z(i,:);
-        end
-        for i=7:1:28
-          temp((i-6),:)=z(i,:);
-        end
-        %figure('Name', 'Downshifted Distribution of Single-Rates');
-        %imagesc(temp);
-        z = temp;
-        downshift=1;
-        izmax = izmax - 6;
-      end
-      z = z-zmin;
-      x = (1:8)';
-      y = (1:28)';
-      
-      % Use row/line of zmax for 1-D fit
-      %zx = z(izmax(1),:)';
-      %zy = z(:,jzmax(1));
-      %fitx = fit(x,zx,'gauss1');
-      %fity = fit(y,zy,'gauss1','Exclude', zy<1000);
-      
-      % Use sum of rows/lines for 1-D fit
-      rowsum  = sum(z,2);
-      linesum = sum(z);
-      fitx = fit(x,linesum','gauss1');
-      fity = fit(y,rowsum,'gauss1','Exclude', rowsum<5000);
-
-      %Evaluate fit
-      stepx = 1/32.2857;
-      stepy = 1/64.5714;
-      xeval = (0:stepx:9.02);
-      yeval = (0:stepy:28.01);
-      zxeval= feval(fitx,xeval);
-      zyeval= feval(fity,yeval);
-    
-      %Account for shift of x-component of the z-Matrix
-      %  388 corresponds to  6  -> yeval( 388)= 5.9934
-      %  389 corresponds to  7  -> yeval( 389)= 6.0089
-      % 1421 corresponds to 22  -> yeval(1421)=21.9912
-      % 1422 corresponds to 23  -> yeval(1422)=22.0066
-      if downshift
-        tempzyeval = zeros(length(zyeval),1);
-        for i = 1:1421
-          tempzyeval(i+388) = zyeval(i);
-        end
-        for i = 1422:1:length(zyeval)
-          tempzyeval(i-1421) = zyeval(i);
-        end
-        zyeval = tempzyeval;
-        %fprintf('%u: transaxial values are shifted by 6 detectors\r', k);
-      elseif upshift
-        tempzyeval = zeros(length(zyeval),1);
-        for i = 1:388          
-          tempzyeval(i+1421) = zyeval(i);
-        end
-        for i = 389:1:length(zyeval)
-          tempzyeval(i-388) = zyeval(i);
-        end
-        zyeval = tempzyeval;
-        %fprintf('%u: transaxial values are shifted by 6 detectors\r', k);
-      end
-      %figure('Name','Evaluated xFit');
-      %plot(xeval,zxeval);
-      %figure('Name','Evaluated yFit');
-      %plot(yeval,zyeval);
-    
-      fitx1D(k) = xeval(find(zxeval==max(zxeval)));
-      fity1D(k) = yeval(find(zyeval==max(zyeval)));
-    end
-  end
-  % End Gaussian-Fit____________________________________
-  %figure('Name','Evaluated Transaxial Fit');
-  %plot(fity1D);
-  
-  %Add First and Last point do fity1D
-  %timeList(timesteps+1) = tstop;
-  %timeList(2:end+1)     = timeList;
-  %timeList(1)           = 0;
-  %fity1D(timesteps+1)   = 14.5;
-  %fity1D(2:end+1)       = fity1D;
-  %fity1D(1)             = 14.5;
-  
-  % ToDo:
-  % Calculate and add First and Last Point to fitx1D!
-  % Caluculation can be done using minlist
-
-  % Flatten the fity to prepare for global fitting
-  rounds = 1;
-  flaty1D = fity1D;
-  if backward
-    for k = length(flaty1D):-1:2
-      if flaty1D(k-1)<flaty1D(k)
-        flaty1D(k-1) = flaty1D(k-1) + rounds*28;
-      end
-      if flaty1D(k-1)<flaty1D(k)
-        rounds = rounds + 1;
-        flaty1D(k-1) = flaty1D(k-1) + 28;
-      end
-    end
-  else
-    for k = 2:1:length(flaty1D)
-      if flaty1D(k)<flaty1D(k-1)
-        flaty1D(k) = flaty1D(k) + rounds*28;
-      end
-      if flaty1D(k)<flaty1D(k-1)
-        rounds = rounds + 1;
-        flaty1D(k) = flaty1D(k) + 28;
-      end
-    end
-  end
-  figure('Name','Evaluated Transaxial Fit flattened');
-  plot(timeList,flaty1D);
-  ylabel('Accumulated transaxial Bucket Number');
-  xlabel('Time [ms]');
-
-  % Global Fitting
-  fitGlobalx = fit(timeList',fitx1D','poly3');
-  fitGlobaly = fit(timeList',flaty1D','poly3');
-  figure('Name','Global Fit X');
-  plot(fitGlobalx,timeList,fitx1D');
-  figure('Name','Global Fit Y');
-  plot(fitGlobaly,timeList,flaty1D');
-  %Evaluating global Fit
-  fitGlobalxeval= feval(fitGlobalx,timeList);
-  fitGlobalyeval= feval(fitGlobaly,timeList);
-  %fitminyeval = feval(fitGlobaly,minlist);
-  %figure();
-  %plot(minlist,fitminyeval);
-  %taking into account gravitation
-  sinfity = flaty1D-fitGlobalyeval';
-  plot(timeList,sinfity);
-  xlabel('Time [ms]');
-  fitGlobalSiny = fit(timeList',sinfity','sin2');
-  figure('Name','Global Sin Fit Y');
-  plot(fitGlobalSiny,timeList,sinfity');
-  fitsinyeval= feval(fitGlobalSiny,timeList);
-  figure();
-  plot(sinfity-fitsinyeval');
-  finalyfitflat = fitsinyeval'+fitGlobalyeval';
-  figure();
-  plot(timeList,finalyfitflat);
-  % Unflatten fity
-  rounds = 1;
-  finalyfit = finalyfitflat;
-  if backward
-    for k = (length(finalyfit)-1):-1:1
-      if finalyfit(k)>28
-        finalyfit(k) = finalyfit(k) - rounds*28;
-      end
-      if finalyfit(k)>28
-        rounds = rounds + 1;
-        finalyfit(k) = finalyfit(k) - 28;
-      end
-    end
-  else
-    for k = 2:length(finalyfit)
-      if finalyfit(k)>28
-        finalyfit(k) = finalyfit(k) - rounds*28;
-      end
-      if finalyfit(k)>28
-        rounds = rounds + 1;
-        finalyfit(k) = finalyfit(k) - 28;
-      end
-    end    
-  end
-  figure();
-  plot(timeList,finalyfit);
-
-  figure;
-  BlockSinglesMovie = zeros(28,8);
-  F(timesteps) = struct('cdata',[],'colormap',[]);
-  %G(time) = struct('cdata',[],'colormap',[]);
-  for k=1:timesteps
-    readPosition = 1;
-    for i=1:8
-      for j=1:28
-        BlockSinglesMovie(j,i)=BlockSingles(k,readPosition);
-        readPosition = readPosition + 1;
-      end
-    end
-    contourf(BlockSinglesMovie);
-    %surf(BlockSinglesMovie);
-    %zlim([0 colorMax]);
-    %zlabel('Bucket Singles Rate');
-    %hold on;
-    %imagesc(BlockSinglesMovie);
-    %hold off;
-    colormap(hot);
-    legend(strcat('Time: ',num2str(int64(timeList(k))),' ms'),'Location','North');
-    caxis([0 colorMax]);
-    c = colorbar;
-    c.Label.String = 'Bucket Singles Rate';
-    xlabel('Ring Number');
-    xlim([0 9]);
-    ylabel('Single-Bucket Number');
-    ylim([0 28]);
-    %hold on;
-    %plot(newfitx(k), fity1D(k), 'c*', 'MarkerSize', 20, 'LineWidth', 3)
-    if k <= timesteps
-      hold on;
-      plot(fitGlobalxeval(k), finalyfit(k), 'b+', 'MarkerSize', 20, 'LineWidth', 3)
-      hold off;
-    end
-    drawnow
-    F(k) = getframe(gcf);
-    %G(k) = getframe(gcf);
-  end
-    
-  fig = figure('Name', 'Unrolled Rings of Single-Buckets');
-  movie(fig,F,1,10)
-  %movie(fig,G,1,24)
-end
-
