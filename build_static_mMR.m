@@ -1,4 +1,6 @@
 function build_static_mMR(filenameBlanc, filenameTrans)
+%filenameBlanc='BlancScan.IMA';
+%filenameTrans='TransmissionScan.IMA';
 % Estimate Number of Tags from Filesize
 sizeBlanc = dir(filenameBlanc);
 sizeTrans = dir(filenameTrans);
@@ -53,7 +55,7 @@ end
 SSRB_Blanc = makeSino(dlistB,filenameBlanc);
 clear dlistB;
 
-% T R A N S - S C A N
+% T R A N S M I S S I O N - S C A N
 % Read Files into a List
 fidT   = fopen(filenameTrans,'r'); 
 dlistT = fread(fidT,[NcsTrans],'uint32');    
@@ -204,24 +206,18 @@ end
 
 % -------------------------------------------------------
 % Cut the first X and after Y ms of acquisition
-function cutdlist = cutlmdata(dlist,tstart,tstop)
-  % Read values for X and Y
-  %promptx='Enter time in ms you want first cut:';
-  %prompty='Enter time in ms you want second cut:';
-  %tstart=input(promptx);
-  %tstop=input(prompty);
-  
+function dlist = cutlmdata(dlist,tstart,tstop)
   % Convert time in [ms] to the format of a Ttag and search for
   % the corresponding position of the Ttag in dlist 
   posx = find(dlist==(int64(tstart)+2^31));
   posy = find(dlist==(int64(tstop)+2^31));
     
-  % Create the cut data list
-  cutdlist = dlist(posx:posy);
+  % Cut data list
+  dlist = dlist(posx:posy);  
 end
 
 % -------------------------------------------------------
-% Create Sinograms
+% Create Sinograms and perform SSRB (Single-Slice-ReBining)
 function [SSRBSino] = makeSino(dlist,filename)
   % Basic Parameters of Siemens Biograph mMR
   Nbins   = 344;         % Number of radial bins (NRAD)
@@ -239,20 +235,29 @@ function [SSRBSino] = makeSino(dlist,filename)
   Span    = 1;
 
   % Prompts between [001111...1] and [01111...1]
-  ptag = dlist(find((dlist<2^31)&(dlist>=2^30)));
-  % Randoms lower or equal [001111...1]
-  rtag = dlist(find((dlist<2^30)));
-  clear dlist;
-
-  % remove preceding tag if necessary
+  ptag = dlist((dlist<2^31)&(dlist>=2^30));
   ptag = ptag-(2^30);
   % clear out-of-sinograms indices
-  ptag = ptag((ptag<=sinoDim)&(ptag>0));
-  rtag = rtag((rtag<=sinoDim)&(rtag>0));    
-
+  if ptag(ptag>sinoDim)
+    ptag = ptag((ptag<=sinoDim));
+  elseif ptag(ptag<=0)
+    ptag = ptag((ptag>0));
+  end
   % build sinograms
-  sino = accumarray(ptag,1,[sinoDim,1])-accumarray(rtag,1,[sinoDim,1]);
-  clear ptag rtag;
+  sino = accumarray(ptag,1,[sinoDim,1]);
+  clear ptag;
+  
+  % Randoms lower or equal [001111...1]
+  rtag = dlist((dlist<2^30));
+  % clear out-of-sinograms indices
+  if rtag(rtag>sinoDim)
+    rtag = rtag((rtag<=sinoDim));
+  elseif rtag(rtag<=0)
+    rtag = rtag((rtag>0));
+  end
+  % substract sinograms
+  sino = sino-accumarray(rtag,1,[sinoDim,1]);
+  clear rtag;
   
   % write sinograms to file
   sinogramname = strcat('sino_', filename, '.raw');
@@ -288,6 +293,7 @@ function [SSRBSino] = makeSino(dlist,filename)
     end
   end
   fclose(fid);
+  clear Sino2D SIN2D;
   
   SINR = double(SSRBSino);
   
@@ -295,8 +301,7 @@ function [SSRBSino] = makeSino(dlist,filename)
   MASK = zeros(Nbins,Nproj);
   for u=1:Nslices
     MASK = MASK + SINR(:,:,u); 
-  end
-  
+  end  
   ngap=0;
   nnogap=0;
   for ith=1:Nproj
@@ -309,18 +314,18 @@ function [SSRBSino] = makeSino(dlist,filename)
         MASK(ir,ith)=1.0;
       end
     end
-  end
-  
+  end  
   for u=1:Nslices
     SIN=SINR(:,:,u);
     SIN(MASK==0.)=nan;
     SIN2=inpaint_nans(SIN,2);
     SSRBSino(:,:,u)=SIN2;
   end
+  clear SINR;
   
   % Smooth 3D data with gaussian kernel
-  %SSRBSino = smooth3(SSRBSino,'gaussian',[3 3 3],0.42466); % sd correlates
-  %to FWHM of 1
+  %SSRBSino = smooth3(SSRBSino,'gaussian',[3 3 3],0.42466);
+  % sd of 0.42466 correlates to FWHM of 1
   SSRBSino = smooth3(SSRBSino,'gaussian',[5 5 5],1.5);
   
   newName = strcat('sino_SSRB_', filename, '.raw');
@@ -328,26 +333,31 @@ function [SSRBSino] = makeSino(dlist,filename)
   fwrite(fid,SSRBSino,'float32');
   fclose(fid);
 
-  for u=1:Nslices
-    for v=1:Nproj
-      for w=1:Nbins
-        STIR_proj(w,u,v)=SSRBSino(w,v,u);
-      end
-    end
-  end
-
-  fid = fopen('STIR_sinogram.s', 'w');
-  fwrite(fid,STIR_proj,'float32');
-  fclose(fid);
+%   % Transform sinogram do STIR projectiondata
+%   for u=1:Nslices
+%     for v=1:Nproj
+%       for w=1:Nbins
+%         STIR_proj(w,u,v)=SSRBSino(w,v,u);
+%       end
+%     end
+%   end
+%   stirName = strcat('STIR_', filename, '.s');
+%   fid = fopen(stirName, 'w');
+%   fwrite(fid,STIR_proj,'float32');
+%   fclose(fid);
 end
 
 % -------------------------------------------------------
 % Reconstruct ratio between Blanc- and Transmission-Scan
 function reconSinoRatio(SSRB_Blanc,SSRB_Trans)
+  %load('SSRB_Blanc.mat');
+  %load('SSRB_Trans.mat');
+  %SSRB_Blanc=smooth3(SSRB_Blanc,'gaussian',[7 7 5],2);
+  %SSRB_Trans=smooth3(SSRB_Trans,'gaussian',[7 7 5],2);
   for u=1:size(SSRB_Blanc,1)
     for v=1:size(SSRB_Blanc,2)
       for w=1:size(SSRB_Blanc,3)
-        if SSRB_Blanc(u,v,w)<4 && SSRB_Trans(u,v,w)<0.8
+        if SSRB_Trans(u,v,w)<0.1 % SSRB_Blanc(u,v,w)<4 &&
           SSRB_Ratio(u,v,w)=SSRB_Blanc(u,v,w);
         else
           SSRB_Ratio(u,v,w)=SSRB_Blanc(u,v,w)./SSRB_Trans(u,v,w);
@@ -355,6 +365,11 @@ function reconSinoRatio(SSRB_Blanc,SSRB_Trans)
       end
     end
   end
+  
+  newName = 'sino_SSRB_ratio.raw';
+  fid = fopen(newName,'w');
+  fwrite(fid,SSRB_Ratio,'float32');
+  fclose(fid);
   
   theta = 180./size(SSRB_Blanc,2);
   for i=1:size(SSRB_Blanc,3)
