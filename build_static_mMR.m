@@ -16,16 +16,15 @@ fidB   = fopen(filenameBlanc,'r');
 dlistB = fread(fidB,[NcsBlanc],'uint32'); 
 fclose(fidB); clear fidB;
 %
-% Get acquisition time in ms and output frequency of Tags
-acqTimeB = tagFrequency(dlistB);
-fprintf('BlancScan - Acquisition time: %u [ms]\r', acqTimeB);
-%
 % Load minima from file or querry user to enter minima
 try
   load('minlistBlanc.mat');
 catch ME
   if (strcmp(ME.identifier,'MATLAB:load:couldNotReadFile'))
     warning('Did not find >>minlistBlanc.mat<<. Enter Minima manually.');
+    % Get acquisition time in ms and output frequency of Tags
+    acqTimeB = tagFrequency(dlistB);
+    fprintf('BlancScan - Acquisition time: %u [ms]\r', acqTimeB);
     % Output prompts per second/10
     % ->Output should be used to determine the time when
     %   Transmission source is entering/leaving helical path
@@ -61,16 +60,15 @@ fidT   = fopen(filenameTrans,'r');
 dlistT = fread(fidT,[NcsTrans],'uint32');    
 fclose(fidT); clear fidT;
 %
-% Get acquisition time in ms and output frequency of Tags
-acqTimeT = tagFrequency(dlistT);
-fprintf('TransScan - Acquisition time: %u [ms]\r', acqTimeT);
-%
 % Load minima from file or querry user to enter minima
 try
   load('minlistTrans.mat');
 catch ME
   if (strcmp(ME.identifier,'MATLAB:load:couldNotReadFile'))
     warning('Did not find >>minlistTrans.mat<<. Enter Minima manually.');
+    % Get acquisition time in ms and output frequency of Tags
+    acqTimeT = tagFrequency(dlistT);
+    fprintf('TransScan - Acquisition time: %u [ms]\r', acqTimeT);
     % Output prompts per second/10
     acqTimeSecT = floor(acqTimeT*0.01);
     temporalPromptDistributionT = p_s(dlistT,acqTimeSecT);
