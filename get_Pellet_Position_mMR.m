@@ -13,7 +13,7 @@ fprintf('First Minimum of Prompts/s was at %u [ms]\n',minlist(1));
 % Show Bucket-Single rates
 showBucketSingles(singleBuckets,singleBucketTimes,minlist);
 end
-    
+
 % -------------------------------------------------------
 % Get Single-Buckets and output detailed dead-time information
 function [singleBucket,blockSingles] = deadTimeInfo(dlist)
@@ -45,7 +45,7 @@ function [singleBucket,blockSingles] = deadTimeInfo(dlist)
         blocknum=bin2dec(binaryTag(4:13));
         singles=bin2dec(binaryTag(14:32));        
         blockSingles(bucketRounds,blocknum+1) = singles;
-        %fprintf('Block: %u\tSingles: %u\t Time[ms]: %s\r',blocknum,singles,Ttag);
+        %fprintf('Pos: %u\tBlock: %u\tSingles: %u\t Time[ms]: %s\r',i,blocknum,singles,Ttag);
         if blocknum == 223
           singleBucket(bucketRounds) = str2num(Ttag);
           bucketRounds = bucketRounds + 1;
@@ -55,6 +55,8 @@ function [singleBucket,blockSingles] = deadTimeInfo(dlist)
   end
   totalLoss=LostEventsSecondLossyNode+LostEventsFirstLossyNode;
   totalEvents=millionEvents*1048575;
+  %GIM_loss_fraction = (totalEvents-LostEventsFirstLossyNode)/totalEvents;
+  %PDR_loss_fraction = (totalEvents-LostEventsSecondLossyNode)/totalEvents;
   % 1048575 corresponds to the 20 bit ,,lost event tally field''
   fprintf('Total Dead-time marks: %u\r',D);
   fprintf('Number of lost events inserted by the "1. Lossy Node": %u\r', LostEventsFirstLossyNode);
