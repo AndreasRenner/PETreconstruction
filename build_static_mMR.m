@@ -1,21 +1,10 @@
 function build_static_mMR(filenameBlanc, filenameTrans)
 %filenameBlanc='BlancScan.IMA';
 %filenameTrans='TransmissionScan.IMA';
-% Estimate Number of Tags from Filesize
-sizeBlanc = dir(filenameBlanc);
-sizeTrans = dir(filenameTrans);
-NcsBlanc  = ceil(sizeBlanc.bytes/4);
-NcsTrans  = ceil(sizeTrans.bytes/4);
-clear sizeBlanc sizeTrans;
-fprintf('BlancScan - Number of Tags: \t %10.0f\r',   NcsBlanc);
-fprintf('TransScan - Number of Tags: \t %10.0f\r\n', NcsTrans);
 
 % B L A N C - S C A N :
 % Read Files into a List
-fidB   = fopen(filenameBlanc,'r');
-dlistB = fread(fidB,[NcsBlanc],'uint32'); 
-fclose(fidB); clear fidB;
-%
+dlistB = readfile(filenameBlanc);
 % Load minima from file or querry user to enter minima
 try
   load('minlistBlanc.mat');
@@ -46,20 +35,15 @@ catch ME
     rethrow(ME)
   end
 end
-%
 % Cut the first X and the last Y ms of acquisition
 [dlistB] = cutlmdata(dlistB,minlistBlanc(1),minlistBlanc(21));
-%
 % Create Sinograms
 SSRB_Blanc = makeSino(dlistB,filenameBlanc);
 clear dlistB;
 
 % T R A N S M I S S I O N - S C A N
 % Read Files into a List
-fidT   = fopen(filenameTrans,'r'); 
-dlistT = fread(fidT,[NcsTrans],'uint32');    
-fclose(fidT); clear fidT;
-%
+dlistT = readfile(filenameTrans);
 % Load minima from file or querry user to enter minima
 try
   load('minlistTrans.mat');
@@ -87,16 +71,27 @@ catch ME
     rethrow(ME)
   end
 end
-%
 % Cut the first X and the last Y ms of acquisition
 [dlistT] = cutlmdata(dlistT,minlistTrans(1),minlistTrans(21));
-%
 % Create Sinograms
 SSRB_Trans = makeSino(dlistT,filenameTrans);
 clear dlistT;
 
 % Calculate and reconstruc ratio of Blank- to Transmission-Scan
 reconSinoRatio(SSRB_Blanc,SSRB_Trans);
+end
+
+% -------------------------------------------------------
+% Read file into dlist
+function dlist = readfile(filename)
+  % Estimate Number of Tags from Filesize
+  size = dir(filename);
+  Ncs  = ceil(size.bytes/4);
+  fprintf('%s - Number of Tags: \t %10.0f\r\n',filename,Ncs);
+  
+  fid  = fopen(filename,'r');
+  dlist= fread(fid,[Ncs],'uint32');    
+  fclose(fid);
 end
 
 % -------------------------------------------------------
