@@ -2,8 +2,7 @@ function build_static_mMR(filenameBlanc, filenameTrans)
 %filenameBlanc='BlancScan.IMA';
 %filenameTrans='TransmissionScan.IMA';
 
-% B L A N C - S C A N :
-% Read Files into a List
+% BLANC-SCAN: read file and make sinogram
 dlistB = readfile(filenameBlanc);
 % Load minima from file or querry user to enter minima
 try
@@ -35,14 +34,11 @@ catch ME
     rethrow(ME)
   end
 end
-% Cut the first X and the last Y ms of acquisition
 [dlistB] = cutlmdata(dlistB,minlistBlanc(1),minlistBlanc(21));
-% Create Sinograms
 SSRB_Blanc = makeSino(dlistB,filenameBlanc);
 clear dlistB;
 
-% T R A N S M I S S I O N - S C A N
-% Read Files into a List
+% TRANSMISSION-SCAN: read file and make sinogram
 dlistT = readfile(filenameTrans);
 % Load minima from file or querry user to enter minima
 try
@@ -71,9 +67,7 @@ catch ME
     rethrow(ME)
   end
 end
-% Cut the first X and the last Y ms of acquisition
 [dlistT] = cutlmdata(dlistT,minlistTrans(1),minlistTrans(21));
-% Create Sinograms
 SSRB_Trans = makeSino(dlistT,filenameTrans);
 clear dlistT;
 
@@ -351,9 +345,9 @@ function reconSinoRatio(SSRB_Blanc,SSRB_Trans)
     for v=1:size(SSRB_Blanc,2)
       for w=1:size(SSRB_Blanc,3)
         if SSRB_Trans(u,v,w)<0.1 % SSRB_Blanc(u,v,w)<4 &&
-          SSRB_Ratio(u,v,w)=SSRB_Blanc(u,v,w);
+          SSRB_Ratio(u,v,w)=log(SSRB_Blanc(u,v,w));
         else
-          SSRB_Ratio(u,v,w)=SSRB_Blanc(u,v,w)./SSRB_Trans(u,v,w);
+          SSRB_Ratio(u,v,w)=log(SSRB_Blanc(u,v,w)./SSRB_Trans(u,v,w));
         end
       end
     end
