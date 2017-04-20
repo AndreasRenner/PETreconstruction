@@ -16,7 +16,7 @@ end
 
 % -------------------------------------------------------
 % Get Single-Buckets and output detailed dead-time information
-function [singleBucket,blockSingles] = deadTimeInfo(dlist)
+function [singleBucketTimes,singleBuckets] = deadTimeInfo(dlist)
   D=0;
   bucketRounds = 1;
   LostEventsFirstLossyNode=0;
@@ -44,10 +44,10 @@ function [singleBucket,blockSingles] = deadTimeInfo(dlist)
       else
         blocknum=bin2dec(binaryTag(4:13));
         singles=bin2dec(binaryTag(14:32));        
-        blockSingles(bucketRounds,blocknum+1) = singles;
+        singleBuckets(bucketRounds,blocknum+1) = singles;
         %fprintf('Pos: %u\tBlock: %u\tSingles: %u\t Time[ms]: %s\r',i,blocknum,singles,Ttag);
         if blocknum == 223
-          singleBucket(bucketRounds) = str2num(Ttag);
+          singleBucketTimes(bucketRounds) = str2num(Ttag);
           bucketRounds = bucketRounds + 1;
         end
       end
@@ -341,3 +341,5 @@ function showBucketSingles(BlockSingles,timeList,minlist)
   %movie(fig,G,1,24)
 end
 
+% Calculate centroid of a matrix
+%s=regionprops(true(size(matrix)),matrix,'WeightedCentroid');
