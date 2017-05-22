@@ -35,17 +35,17 @@ function [singleBucketTimes,singleBuckets] = deadTimeInfo(dlist)
         loss=bin2dec(binaryTag(13:32));
         LostEventsFirstLossyNode=LostEventsFirstLossyNode+loss;
         millionEvents=millionEvents+1;
-        %fprintf('1. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
+        fprintf('1. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
       elseif typefield==6
         loss=bin2dec(binaryTag(13:32));
         LostEventsSecondLossyNode=LostEventsSecondLossyNode+loss;
         millionEvents=millionEvents+1;
-        %fprintf('2. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
+        fprintf('2. Lossy Node: %u\tlost events at %s [ms]\r',loss,Ttag);
       else
         blocknum=bin2dec(binaryTag(4:13));
         singles=bin2dec(binaryTag(14:32));        
         singleBuckets(bucketRounds,blocknum+1) = singles;
-        %fprintf('Pos: %u\tBlock: %u\tSingles: %u\t Time[ms]: %s\r',i,blocknum,singles,Ttag);
+        fprintf('Pos: %u\tBlock: %u\tSingles: %u\t Time[ms]: %s\r',i,blocknum,singles,Ttag);
         if blocknum == 223
           singleBucketTimes(bucketRounds) = str2num(Ttag);
           bucketRounds = bucketRounds + 1;
