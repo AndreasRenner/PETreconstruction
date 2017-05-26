@@ -26,11 +26,11 @@ for i=1:length(dlist)
     %fprintf('Pos %u\tat %s ms:\tPrompt Event:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
   elseif   dlist(i) < 2684354560
     timeTag = timeTag + 1;
-    currentTime=num2str(dlist(i)-2^31);
+    %currentTime=num2str(dlist(i)-2^31);
     %fprintf('Pos %u\tat %s ms:\tTime Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
   elseif   dlist(i) < 3221225472
     DtimeTag = DtimeTag + 1;
-    fprintf('Pos %u\tat %s ms:\tDead-Time Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
+    %fprintf('Pos %u\tat %s ms:\tDead-Time Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));
   elseif   dlist(i) < 3758096384
     motionTag = motionTag + 1;
     %fprintf('Pos %u\tat %s ms:\Motion Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));

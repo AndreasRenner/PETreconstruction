@@ -22,7 +22,7 @@ fid   = fopen(file,'r');
 %pos   = ftell(fid);
 
 for i=1:Nscans
-  pos   = ftell(fid);
+  %pos   = ftell(fid);
   dlist = fread(fid,[Nread],'uint32');
   
   % Get acquisition time in ms and output frequency of Tags
@@ -41,16 +41,17 @@ for i=1:Nscans
   clear prompt;
   prompt = 'Enter stop time in ms:';
   tstop  = input(prompt);
-  clear prompt;
+  %clear prompt;
 
-  prompt = 'Enter Nread Faktor:';
-  faktor = input(prompt);
-  Nread  = ceil(Npos*faktor);
+  %prompt = 'Enter Nread Faktor:';
+  %faktor = input(prompt);
+  Nread  = Npos;
+  %Nread  = ceil(Npos*faktor(i));
 
   dlist  = cutlmdata(dlist,tstart,tstop);
 
   name   = strcat(filename, num2str(i));
-  makeSino(dlist,name);
+  makeSino(dlist,name,0);
   clear dlist;
   SSRB_mMR(name);
 
