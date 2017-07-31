@@ -1,4 +1,4 @@
-function makeSino(dlist,filename,randomSubstraction)
+function makeSino(dlist,filename)
 % Create Sinograms
 
 % Basic Parameters of Siemens Biograph mMR
@@ -17,15 +17,13 @@ ptag = ptag((ptag<=prod(sinoDim))&(ptag>0));
 sino = accumarray(ptag,1,[sinoDim,1]);
 clear ptag;
 
-if randomSubstraction
-  % Randoms lower or equal [001111...1]
-  rtag = dlist((dlist<2^30));
-  % clear out-of-sinograms indices
-  rtag = rtag((rtag<=prod(sinoDim))&(rtag>0));
-  % substract sinograms
-  sino = sino-accumarray(rtag,1,[sinoDim,1]);
-  clear rtag;
-end
+% Randoms lower or equal [001111...1]
+rtag = dlist((dlist<2^30));
+% clear out-of-sinograms indices
+rtag = rtag((rtag<=prod(sinoDim))&(rtag>0));
+% substract sinograms
+sino = sino-accumarray(rtag,1,[sinoDim,1]);
+clear rtag;
 
 % write sinograms to file
 sinogramname = strcat('sino_', filename, '.raw');
