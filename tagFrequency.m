@@ -54,7 +54,7 @@ for i=1:length(dlist)
     %fprintf('Pos %u\tat %s ms:\tControl Tag:\t%s\r',i,currentTime,num2str(dec2bin(dlist(i))));     
   end
 end
-clear dlist;
+%clear dlist;
 if specialTagCounter==0
   fprintf('None\r');
 end
