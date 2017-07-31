@@ -211,7 +211,31 @@ legend('Prompts','Randoms','Scatter','Trues','NEC', ...
 xlim([120,550]);
 ylim([0,500000000])
 
-% show NEC curve
+% show NEC curve comparison
+figure();
+h = stem(sortResults(:,2), [sortResults(:,5),sortResults(:,6),sortResults(:,7), ...
+    sortResults(:,8),sortResults(:,9),sortResults(:,10),sortResults(:,11), ...
+    sortResults(:,12),sortResults(:,13),sortResults(:,14)],'filled', 'LineStyle', 'none');
+xlabel('Activity [MBq]');
+ylabel('Counts');
+h(1).Marker = '*';
+h(2).Marker = '*';
+h(3).Marker = '*';
+h(4).Marker = '*';
+h(5).Marker = 'o';
+h(6).Marker = 'o';
+h(7).Marker = 'o';
+h(8).Marker = 'o';
+h(9).Marker = 'o';
+h(10).Marker = 'o';
+legend('Prompts','Randoms','Scatter','Trues','NECDahlbom0034','NECBailey0034', ...
+    'NECDahlbom002','NECBailey002','NECDahlbom1','NECBailey1', ...
+    'Location','northeast');
+xlim([120,550]);
+ylim([0,500000000])
+
+
+% show NEC curve (used for Publication)
 figure();
 h = plot(sortResults(:,2), [sortResults(:,6),sortResults(:,8), ...
     sortResults(:,15)]);
@@ -224,8 +248,8 @@ h(1).LineStyle = '--';
 h(2).LineStyle = ':';
 legend('Randoms','Trues','NEC', ...
     'Location','northwest');
-xlim([120,410]);
-ylim([0,290000000]);
+xlim([120,220]);
+ylim([50000000,250000000]);
 
 % show results vs. corrected results for prompt/random/true
 %figure();
