@@ -38,7 +38,7 @@ for i=1:Nscans
   fid  = fopen(name,'r');
   for j=1:Nslices
     Sino2D = fread(fid,[Nbins,Nproj],'float32');
-    SIN2D  = double(Sino2D)*decayF(i);
+    SIN2D  = double(Sino2D)/decayF(i);
     SSRBSino(:,:,j) = SSRBSino(:,:,j) + SIN2D;
   end
   fclose(fid);
