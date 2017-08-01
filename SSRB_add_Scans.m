@@ -12,9 +12,11 @@ Nparts = 40;
 if     strcmp(filename, '05BlankFast')
   decayCor = 3471;
   Nscans = 10;
+  cd '05BlankFast'
 elseif strcmp(filename, '02TransPhantom1')
   decayCor = 2234;
   Nscans = 2;
+  cd '02TransPhantom1'
 elseif strcmp(filename, '03TransPhantom2')
   decayCor = 2630;
   Nscans = 2;
@@ -45,6 +47,8 @@ partnumber = zeros(Nparts*Nscans,1);
 name = strcat('sino_SSRB_',filename,'_*_*.raw');
 d = dir(name);
 filenames = {d.name};
+
+cd ..
 
 % (1) DECAY CORRECTION
 % calculate decay correction factor for each part
@@ -88,7 +92,7 @@ for i=1:Nparts
   for j=1:Nscans
     k = indices(j);
     totalCorF(k) = scanNumCor*timeF(k)/decayF(k);
-    fprintf('Total Cor. Faktor for part %u, %u is: %u\r',i,j,totalCorF(k));
+    %fprintf('Total Cor. Faktor for part %u, %u is: %u\r',i,j,totalCorF(k));
     name = cell2mat(filenames(k));
     fid  = fopen(name,'r');
     for l=1:Nslices
@@ -104,21 +108,57 @@ for i=1:Nparts
   totalcounts = sum(sum(sum(SSRBSino)));
   % apply correction factor
   sensitivityCor = 200000000./totalcounts;
-  fprintf('Total Counts for part %u is: %u; corF: %u\r',i,totalcounts,sensitivityCor);
+  %fprintf('Total Counts for part %u is: %u; corF: %u\r',i,totalcounts,sensitivityCor);
   SSRBSino = SSRBSino*sensitivityCor;
   
+  % Write fully corrected sinogram to file
   name = strcat('SSRB_cor_',filename,'_',num2str(i),'.raw');
   fid = fopen(name,'w');
   fwrite(fid,SSRBSino,'float32');
   fclose(fid);
   
+  % RECONSTRUCTION
+  % Reconstruction of Part using FBP
+  recon = zeros(Nbins,Nbins,Nslices,'double');
   for u=1:Nslices
-    recon(:,:,u)=iradon(SSRBSino(:,:,u),theta,Nbins);
+    recon(:,:,u) = iradon(SSRBSino(:,:,u),theta,Nbins);
   end
-
+  % Write reconstructed image to file
   name = strcat('recon_', filename,'_',num2str(i),'.raw');
   fid = fopen(name, 'w');
   fwrite(fid,recon,'float32');
+  fclose(fid);
+  
+  % SEGMENTATION
+  % Segmentation of the reconstructed part
+  mask = zeros(Nbins,Nbins,Nslices,'double');
+  tmpmask = zeros(Nbins,Nbins,49,'double');
+  counter = 1;
+  step = floor(2*(41-i));
+  for u = (step-1):(step+47)
+    % Here one could add additional segmentation regarding radius
+    % to distinguish between emission and transmission
+    tmpmask(:,:,counter) = recon(:,:,u);
+    counter = counter+1;
+  end
+  % Find 8000 voxel with biggest intensity values in tmpmask
+  flatmask = reshape(tmpmask,Nbins*Nbins*49,1);
+  [sortmask,index] = sort(flatmask,'descend');
+  clear sortmask;
+  flatmask = zeros(Nbins*Nbins*49,1);
+  for u=1:5000
+    flatmask(index(u))=1;
+  end
+  tmpmask = reshape(flatmask,[Nbins,Nbins,49]);
+  counter = 1;
+  for u = (step-1):(step+47)
+    mask(:,:,u) = tmpmask(:,:,counter);
+    counter = counter+1;
+  end
+  % Write segmentation result (-> mask) to file
+  name = strcat('mask_', filename,'_',num2str(i),'.raw');
+  fid = fopen(name, 'w');
+  fwrite(fid,mask,'float32');
   fclose(fid);
 end
 
