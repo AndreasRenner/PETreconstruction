@@ -1,4 +1,4 @@
-function SSRB_mMR(filename)
+function SSRB_mMR(sino,name)
 % Basic Parameters of Siemens Biograph mMR
 Nbins   = 344;         % Number of radial bins (NRAD)
 Nproj   = 252;         % Number of projections (NANG)
@@ -28,19 +28,23 @@ for iseg=1:Nseg
   Nsinos=Nsinos+NsinoSeg(iseg);
 end
 
-sinogramname = strcat('sino_', filename, '.raw');
-fid=fopen(sinogramname,'r');
+% For reading a file
+%sinogramname = strcat('sino_', name, '.raw');
+%fid=fopen(sinogramname,'r');
+
 Nsino=0;
 for iseg=1:Nseg
   for u=1:NsinoSeg(iseg)
     Nsino  = Nsino+1;
-    Sino2D = fread(fid, [Nbins, Nproj], '*int16');
+    Sino2D = sino(:,:,Nsino);
+    % Alternatively read from file
+    %Sino2D = fread(fid, [Nbins, Nproj], '*int16');
     k_SSRB = (2*u-1) + Offset(iseg);
     SIN2D  = double(Sino2D); 
     SSRBSino(:,:,k_SSRB)=SSRBSino(:,:,k_SSRB)+SIN2D; 
   end
 end
-fclose(fid);
+%fclose(fid);
 clear Sino2D SIN2D;
 
 SINR = double(SSRBSino);
@@ -76,7 +80,7 @@ SSRBSino = smooth3(SSRBSino,'gaussian',[3 3 3],0.42466);
 % sd of 0.42466 correlates to FWHM of 1
 %SSRBSino = smooth3(SSRBSino,'gaussian',[5 5 5],1.5);
 
-newName = strcat('sino_SSRB_', filename, '.raw');
+newName = strcat('sino_SSRB_', name, '.raw');
 fid = fopen(newName,'w');
 fwrite(fid,SSRBSino,'float32');
 fclose(fid);
