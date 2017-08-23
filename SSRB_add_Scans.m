@@ -48,7 +48,7 @@ name = strcat('sino_SSRB_',filename,'_*_*.raw');
 d = dir(name);
 filenames = {d.name};
 
-cd ..
+%cd ..
 
 % (1) DECAY CORRECTION
 % calculate decay correction factor for each part
@@ -161,6 +161,34 @@ for i=1:Nparts
   fwrite(fid,mask,'float32');
   fclose(fid);
 end
+
+% Reproject the Segmentation to get Sinogram with reduced scatter/randoms
+PETprojection(filename);
+
+% Add up all parts to get Sinogram of whole acquisition
+SSRBSino = zeros(Nbins,Nproj,Nslices,'double');
+for i=1:Nparts
+  name = strcat('SSRB_seg_',filename,'_',num2str(i),'.raw');
+  fid  = fopen(name,'r');
+  for l=1:Nslices
+    Sino2D = fread(fid,[Nbins,Nproj],'float32');
+    SIN2D  = double(Sino2D);
+    for j=1:Nbins
+      for k=1:Nproj
+        if isnan(SIN2D(j,k));
+          SIN2D(j,k) = 0.0;
+        end
+      end
+    end
+    SSRBSino(:,:,l) = SSRBSino(:,:,l) + SIN2D;
+  end
+  fclose(fid);
+end
+% Write Sinogram to file
+name = strcat('SSRB_complete_', filename,'.raw');
+fid = fopen(name, 'w');
+fwrite(fid,SSRBSino,'float32');
+fclose(fid);
 
 end
 
