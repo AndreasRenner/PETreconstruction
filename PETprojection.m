@@ -89,6 +89,13 @@ for i=1:Nparts
   for k=1:Nslices
     input(:,:,k)  = fread(fid2, [NRAD,NANG], '*float32');
     output(:,:,k) = input(:,:,k).*factor2(:,:,k);
+    for j=1:NRAD
+      for l=1:NANG
+        if isnan(output(j,l,k));
+          output(j,l,k) = 0.0;
+        end
+      end
+    end
   end
   fwrite(fid3,output,'float32');
   fclose(fid2);
