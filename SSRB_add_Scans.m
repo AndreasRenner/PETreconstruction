@@ -192,3 +192,15 @@ fclose(fid);
 
 end
 
+function saveMask(mask,filename)
+mask = logical(mask);
+
+fid=fopen(filename,'w');
+fwrite(fid,mask,'ubit1');
+fclose(fid);
+
+% To Read it again use:
+%fid=fopen(filename,'r');
+%mask=fread(fid,[a b],'ubit1=>double');
+%mask=fread(fid,[a b],'ubit1=>logical');
+end
