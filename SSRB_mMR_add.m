@@ -7,9 +7,9 @@ corBlankFast = [98,218.5,340,464.5,583,699,808.5,926,1047,1156.5];
 corTransPhantom1 = [60,185];
 corTransPhantom2 = [80,197];
 corTransRQ = [71.5,185.5];
-cor01Blank = [67.8,173.7,372.9,481.5,589.8,693.5,801.5,910,1024.3,1134.8,1246.5,1363.4,1466.3,1572.2];
+cor01Blank = [67.8,173.7,372.9,481.5,589.8,693.5,801.5,910,1024.3,1134.8,1246.5,1363.4,1466.3,1572.2,1674];
 cor02Trans = [67.1,171.4,275.2,376.4,479.4,624.9];
-cor03Trans = [59.9,162.8,264.3,366.4,468.3,573.9];
+cor03Trans = [59.9,162.8,264.3,366.4,468.3,573.9,676.7];
 % S C A N T I M E   C O R R E C T I O N
 % Values in [ms] (calculated with tstop-tstart)
 scanTime01Blank = [80170,80310,79230,80030,79860,81460,80720,80980,79060,79710,79130,79680,79080,79520,77570];
@@ -39,7 +39,7 @@ elseif strcmp(filename, '04TransRQ')
   Nscans = 2;
 elseif strcmp(filename, '01Blank')
   decayCor = cor01Blank + 930;
-  Nscans = 14;
+  Nscans = 15;
   scanTime = scanTime01Blank;
 elseif strcmp(filename, '02TransPhantom2')
   decayCor = cor02Trans + 2910;
@@ -47,7 +47,7 @@ elseif strcmp(filename, '02TransPhantom2')
   scanTime = scanTime02Trans;
 elseif strcmp(filename, '03TransPhantom1')
   decayCor = cor03Trans + 3668;
-  Nscans = 6;
+  Nscans = 7;
   scanTime = scanTime03Trans;
 else
   Nscans = 10;
@@ -60,7 +60,7 @@ for i=1:Nscans
   decayF    = 1/2^(-decayCor(i)/halflifeFDG);
   scanTimeF = 100000/scanTime(i);
   fprintf('Decay Faktor for Scan %u is: %u\r',i,decayF);
-  name=strcat('sino_SSRB_',filename,num2str(i),'randomSubstracted.raw');
+  name=strcat('sino_SSRB_',filename,num2str(i),'randomSubstracted_noGapFilling.raw');
   fid =fopen(name,'r');
   for j=1:Nslices
     Sino2D = fread(fid,[Nbins,Nproj],'float32');
@@ -71,7 +71,19 @@ for i=1:Nscans
   fclose(fid);
 end
 
-name = strcat('sino_SSRB_Cor_', filename, '.raw');
+% Read Mask for Sinogram and Mask for Ratio
+SinoMaskS= zeros(Nbins,Nproj,Nslices,'double');
+nameMaskS = strcat('mask_Tube_2017_08.raw');
+fidMaskS  = fopen(nameMaskS,'r');
+for i=1:Nslices
+  SinoMaskS(:,:,i) = fread(fidMaskS,[Nbins,Nproj],'float32');
+end
+fclose(fidMaskS);
+
+% Apply Mask
+SSRBSino = SSRBSino.*SinoMaskS;
+
+name = strcat('sino_SSRB_seg_Cor_noGap_',num2str(Nscans),filename,'.raw');
 fid = fopen(name,'w');
 fwrite(fid,SSRBSino,'float32');
 fclose(fid);
