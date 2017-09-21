@@ -8,7 +8,7 @@ fprintf('%s - Total Number of Tags: \t %10.0f\r',filename,Ncs);
 
 Npos  = Ncs/Nscans;
 %Nread = Npos;
-Nread = ceil(Npos*1.16); % for 01Blankceil(Npos*1.05); % for Trans 
+Nread = ceil(Npos*1.05); % for Trans ceil(Npos*1.16); % for 01Blank 
 fprintf('Number of Tags per read: %u\r\n', Nread);
 start = 0;
 %
@@ -23,12 +23,14 @@ start = 0;
 %tstart=[27440,131270,236000,336690,440090,585420];
 %tstop=[106750,211540,314470,416200,518670,664460];
 %faktor=[1.03,0.97,0.98,0.95,0.95,1]; %0 = 1.05
+%scanDirection=1;
 %
 % Values for 03TransPhantom1 (2017-08-11)
 %start = 100606+108831+106818+101711+104281+100627;
-%tstart=[20580,123140,225080,326680,428970,534140,636800];
-%tstop =[99290,202500,303510,406050,507720,613580,716540];
-%faktor=[1.05,1.02,1,0.98,0.96,1,1]; %0 = 1.05
+tstart=[20580,123140,225080,326680,428970,534140,636800];
+tstop =[99290,202500,303510,406050,507720,613580,716540];
+faktor=[1.05,1.02,1,0.98,0.96,1,1]; %0 = 1.05
+scanDirection=1;
 %
 % Values for 01Blank (2017-08-11)
 %start = 125764+89206+223582+99552+113780+83606+124739+91346+ ...
@@ -38,7 +40,10 @@ start = 0;
 %tstop=[107900,213860,412540,521480,629770,734250,841870,950490, ...
 %   1063860,1174680,1286040,1403280,1505830,1611940,1712770];
 %faktor=[1.14,1.11,1.08,1.07,1.05,1.06,1.01,1.02,1,0.94,0.92,0.92,0.9,0.88,1];
+%scanDirection=1;
+
 fid   = fopen(file,'r');
+
 %offset= uint64(ceil(Npos*1.16)+ceil(Npos*1.14)+ceil(Npos*1.11)+ ...
 %               ceil(Npos*1.08)+ceil(Npos*1.07)+ceil(Npos*1.05)+ ...
 %               ceil(Npos*1.06)+ceil(Npos*1.01)+ceil(Npos*1.02)+ ...
@@ -46,7 +51,7 @@ fid   = fopen(file,'r');
 %               ceil(Npos*0.9))*4;%+ceil(Npos*0.88))*4;
 %fseek(fid,offset,'bof');
 
-for i=1:(Nscans-1)
+for i=1:Nscans
   dlist = fread(fid,[Nread],'uint32');
   
   % Get acquisition time in ms and output frequency of Tags
@@ -62,10 +67,14 @@ for i=1:(Nscans-1)
   %ylabel('Prompts per second');
   
   if ScatterCor
-    fprintf('Input Scan Direction\r');
-    prompt='1 -> highest peak first; 0 -> else: ';
-    scanDirection=input(prompt);
-    clear prompt;
+    %fprintf('Input Scan Direction\r');
+    %prompt='1 -> highest peak first; 0 -> else: ';
+    %scanDirection=input(prompt);
+    %clear prompt;
+    % 01Blank starts with highest peak first
+    % 02TransPhantom2 starts with highest peak first
+    % 03TransPhantom1 starts with highest peak first
+    
     name = strcat('minlistScan',num2str(i),filename);
     try
       load(name);
@@ -85,15 +94,32 @@ for i=1:(Nscans-1)
         rethrow(ME)
       end
     end
-    cutlist=zeros(1,41);
-    cutlist(41)=minlist(21);
+    cutlist=zeros(1,161);
+    overlap=zeros(1,161);
+    cutlist(161)=minlist(21);
     for j=1:20
-      temp = (minlist(j+1)-minlist(j))/2;
-      cutlist(2*j-1) = minlist(j);
-      cutlist(2*j)   = minlist(j)+temp;
+      step = (minlist(j+1)-minlist(j))/8;
+      cutlist(8*j-7) = minlist(j);
+      cutlist(8*j-6) = minlist(j)+step;
+      cutlist(8*j-5) = minlist(j)+2*step;
+      cutlist(8*j-4) = minlist(j)+3*step;
+      cutlist(8*j-3) = minlist(j)+4*step;
+      cutlist(8*j-2) = minlist(j)+5*step;
+      cutlist(8*j-1) = minlist(j)+6*step;
+      cutlist(8*j)   = minlist(j)+7*step;
+      overlap(8*j-7) = step*0.1;
+      overlap(8*j-6) = step*0.1;
+      overlap(8*j-5) = step*0.1;
+      overlap(8*j-4) = step*0.1;
+      overlap(8*j-3) = step*0.1;
+      overlap(8*j-2) = step*0.1;
+      overlap(8*j-1) = step*0.1;
+      overlap(8*j)   = step*0.1;
     end
-    for j=1:40
-      dlistcut = cutlmdata(dlist,cutlist(j),cutlist(j+1));
+    for j=1:160
+      cut1 = cutlist(j)-overlap(j);
+      cut2 = cutlist(j+1)+overlap(j+1);
+      dlistcut = cutlmdata(dlist,cut1,cut2);
       % Check if Cut was succesful
       %acqTime  = tagFrequency(dlistcut);
       %tempDist = p_s(dlistcut,acqTime,cutlist(j));
@@ -104,13 +130,19 @@ for i=1:(Nscans-1)
       timestamp = cutlist(j)+(cutlist(j+1)-cutlist(j))/2;
       stamp = strcat('_',num2str(timestamp),'_');
       if scanDirection
-        dlistname = strcat(filename,stamp,num2str(41-j));
+        dlistname = strcat(filename,stamp,num2str(161-j));
       else
         dlistname = strcat(filename,stamp,num2str(j));
       end
-      sino = makeSinoBig(dlistcut);
+      sino = makeSinoRandomSubstraction(dlistcut);
       clear dlistcut;
       SSRB_mMR(sino,dlistname);
+    end
+    
+    if scanDirection
+      scanDirection = 0;
+    else
+      scanDirection = 1;
     end
     
   else
