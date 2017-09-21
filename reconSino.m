@@ -51,5 +51,4 @@ name = strcat('recon_', filename);
 fid = fopen(name, 'w');
 fwrite(fid,recon,'float32');
 fclose(fid);
-
 end
