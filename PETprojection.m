@@ -1,5 +1,5 @@
 
-function PETprojection(filename)
+function PETprojection(filename,Nparts)
 % This program generates the SSRB sinograms corresponding to the segmented
 % Object and Transmission Source. 
 %
@@ -22,8 +22,6 @@ function PETprojection(filename)
 % -------------------------------------------------------------
 
 % INPUT PARAMETERS
-Nparts  = 40;
-
 RES     = 344;
 NRAD    = 344;
 NANG    = 252;
@@ -33,12 +31,14 @@ delta_ang = 180./NANG;
 
 for i=1:Nparts
   % Opening Mask of the PET image and radon projection of this image
-  file1 = strcat('mask_',filename,'_',num2str(i),'.raw');
+  file1 = strcat('mask_01Blank_',num2str(i),'.raw');
   file2 = strcat('SSRB_cor_',filename,'_',num2str(i),'.raw');
   file3 = strcat('SSRB_seg_',filename,'_',num2str(i),'.raw');
+  file4 = strcat('mask_proj_01Blank',num2str(i),'.raw');
   fid1  = fopen(file1,'r');
   fid2  = fopen(file2,'r');
   fid3  = fopen(file3, 'w');
+  fid4  = fopen(file4, 'w');
 
   %Reading the Mask
   PET2  = zeros(RES,RES,Nslices,'double');
@@ -98,8 +98,10 @@ for i=1:Nparts
     end
   end
   fwrite(fid3,output,'float32');
+  fwrite(fid4,factor2,'float32');
   fclose(fid2);
   fclose(fid3);
+  fclose(fid4);
 end
 
 end
