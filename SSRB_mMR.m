@@ -47,36 +47,36 @@ end
 %fclose(fid);
 clear Sino2D SIN2D;
 
-SINR = double(SSRBSino);
+%SINR = double(SSRBSino);
 
 % Gaps Finder and Gap Filling (using inpaint)
-MASK = zeros(Nbins,Nproj);
-for u=1:Nslices
-  MASK = MASK + SINR(:,:,u); 
-end  
-ngap=0;
-nnogap=0;
-for ith=1:Nproj
-  for ir=1:Nbins
-    if (MASK(ir,ith)<0.01)     
-      ngap=ngap+1;    
-      MASK(ir,ith)=0.0;
-    else
-      nnogap=nnogap+1; 
-      MASK(ir,ith)=1.0;
-    end
-  end
-end  
-for u=1:Nslices
-  SIN=SINR(:,:,u);
-  SIN(MASK==0.)=nan;
-  SIN2=inpaint_nans(SIN,2);
-  SSRBSino(:,:,u)=SIN2;
-end
-clear SINR;
+%MASK = zeros(Nbins,Nproj);
+%for u=1:Nslices
+%  MASK = MASK + SINR(:,:,u); 
+%end  
+%ngap=0;
+%nnogap=0;
+%for ith=1:Nproj
+%  for ir=1:Nbins
+%    if (MASK(ir,ith)<0.01)     
+%      ngap=ngap+1;    
+%      MASK(ir,ith)=0.0;
+%    else
+%      nnogap=nnogap+1; 
+%      MASK(ir,ith)=1.0;
+%    end
+%  end
+%end  
+%for u=1:Nslices
+%  SIN=SINR(:,:,u);
+%  SIN(MASK==0.)=nan;
+%  SIN2=inpaint_nans(SIN,2);
+%  SSRBSino(:,:,u)=SIN2;
+%end
+%clear SINR;
 
 % Smooth 3D data with gaussian kernel
-SSRBSino = smooth3(SSRBSino,'gaussian',[3 3 3],0.42466);
+%SSRBSino = smooth3(SSRBSino,'gaussian',[3 3 3],0.42466);
 % sd of 0.42466 correlates to FWHM of 1
 %SSRBSino = smooth3(SSRBSino,'gaussian',[5 5 5],1.5);
 
