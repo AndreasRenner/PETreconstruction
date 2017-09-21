@@ -60,7 +60,7 @@ for i=1:Nscans
   decayF    = 1/2^(-decayCor(i)/halflifeFDG);
   scanTimeF = 100000/scanTime(i);
   fprintf('Decay Faktor for Scan %u is: %u\r',i,decayF);
-  name=strcat('sino_SSRB_',filename,num2str(i),'randomSubstracted_noGapFilling.raw');
+  name=strcat('sino_SSRB_',filename,num2str(i),'randomSubstracted.raw');
   fid =fopen(name,'r');
   for j=1:Nslices
     Sino2D = fread(fid,[Nbins,Nproj],'float32');
