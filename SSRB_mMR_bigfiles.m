@@ -8,9 +8,11 @@ fprintf('%s - Total Number of Tags: \t %10.0f\r',filename,Ncs);
 
 Npos  = Ncs/Nscans;
 %Nread = Npos;
-Nread = ceil(Npos*1.05); % for Trans ceil(Npos*1.16); % for 01Blank 
+Nread = ceil(Npos*1.15); % for 04HOT
+%Nread = ceil(Npos*1.05); % for Trans
+%Nread = ceil(Npos*1.16); % for 01Blank 
 fprintf('Number of Tags per read: %u\r\n', Nread);
-start = 0;
+%start = 0;
 %
 % Values for 05BlankFast (2017-05-19)
 %start = 154938+118585+110162+155863+87207+124791; %97032+157230+96259
@@ -27,10 +29,20 @@ start = 0;
 %
 % Values for 03TransPhantom1 (2017-08-11)
 %start = 100606+108831+106818+101711+104281+100627;
-tstart=[20580,123140,225080,326680,428970,534140,636800];
-tstop =[99290,202500,303510,406050,507720,613580,716540];
-faktor=[1.05,1.02,1,0.98,0.96,1,1]; %0 = 1.05
-scanDirection=1;
+%tstart=[20580,123140,225080,326680,428970,534140,636800];
+%tstop =[99290,202500,303510,406050,507720,613580,716540];
+%faktor=[1.05,1.02,1,0.98,0.96,1,1]; %0 = 1.05
+%scanDirection=1;
+%
+% Values for 04TransPhantom2HOT (2017-08-11)
+%start = 106048+112690;%+279505+279352+111127+101297;
+%tstart=[14440,120060,221710,679020,782860,889820,991260];
+%tstop =[94090,198470,300740,757850,862400,968080,1070510];
+%faktor=[0.9,1.5,1.42,0.82,0.75,1,1]; %0 = 0.9
+%scanDirection=0;
+% For Emission-Scan:
+start = 106048+112690+93222; % 317977
+%faktor= 2*0.9 + 0.82; %0 = 1.15;
 %
 % Values for 01Blank (2017-08-11)
 %start = 125764+89206+223582+99552+113780+83606+124739+91346+ ...
@@ -44,12 +56,12 @@ scanDirection=1;
 
 fid   = fopen(file,'r');
 
-%offset= uint64(ceil(Npos*1.16)+ceil(Npos*1.14)+ceil(Npos*1.11)+ ...
-%               ceil(Npos*1.08)+ceil(Npos*1.07)+ceil(Npos*1.05)+ ...
+offset= uint64(2*ceil(Npos*0.9)+ceil(Npos*0.82))*4;%+ceil(Npos*1.5)+ceil(Npos*1.42)+ ...
+%               ceil(Npos*0.82))*4;%+ceil(Npos*1.07)+ceil(Npos*1.05)+ ...
 %               ceil(Npos*1.06)+ceil(Npos*1.01)+ceil(Npos*1.02)+ ...
 %               Npos+ceil(Npos*0.94)+2*ceil(Npos*092)+ ...
 %               ceil(Npos*0.9))*4;%+ceil(Npos*0.88))*4;
-%fseek(fid,offset,'bof');
+fseek(fid,offset,'bof');
 
 for i=1:Nscans
   dlist = fread(fid,[Nread],'uint32');
@@ -60,11 +72,11 @@ for i=1:Nscans
   acqTime = tagFrequency(dlist);
   fprintf('Acquisition Time Part %u: %u [ms]\r',i , acqTime);
   % Output prompts per second/10
-  %temporalPromptDistribution = p_s(dlist,acqTime,start);
-  %figure('Name', 'Temporal Distribution of Prompts');
-  %plot(temporalPromptDistribution);
-  %xlabel('Time [s/100]');
-  %ylabel('Prompts per second');
+  temporalPromptDistribution = p_s(dlist,acqTime,start);
+  figure('Name', 'Temporal Distribution of Prompts');
+  plot(temporalPromptDistribution);
+  xlabel('Time [s/100]');
+  ylabel('Prompts per second');
   
   if ScatterCor
     %fprintf('Input Scan Direction\r');
@@ -74,6 +86,7 @@ for i=1:Nscans
     % 01Blank starts with highest peak first
     % 02TransPhantom2 starts with highest peak first
     % 03TransPhantom1 starts with highest peak first
+    % 04TransPhantom2HOT starts with low  peak first
     
     name = strcat('minlistScan',num2str(i),filename);
     try
@@ -146,6 +159,16 @@ for i=1:Nscans
     end
     
   else
+%    % Get acquisition time in ms and output frequency of Tags
+%    name = strcat('minlistScan',num2str(i),filename);
+%    minlist=zeros(1,21);
+%    for j=1:21
+%      fprintf('%u. Minimum - ',j);
+%      prompt='Enter time in ms:';
+%      minlist(j)=input(prompt);
+%    end
+%    clear prompt;
+%    save(name,'minlist');
     %prompt = 'Enter start time in ms:';
     %tstart = input(prompt);
     %clear prompt;
