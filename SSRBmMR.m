@@ -1,4 +1,4 @@
-function [SSRBsino,maxIndex] = SSRBmMR(sino)
+function [SSRBsino,maxIndex] = SSRBmMR(sino,maxIndexRef)
 % Basic Parameters of Siemens Biograph mMR
 Nbins   = 344;         % Number of radial bins (NRAD)
 Nproj   = 252;         % Number of projections (NANG)
@@ -43,19 +43,31 @@ for iseg=1:Nseg
 end
 clear Sino2D SIN2D;
 
-% compress sinogram to 13 slices around max-count-slice
-% smooth sinogram
-sino = smooth3(SSRBSino,'gaussian',[5 5 3],1);
-% find slice with highest number of counts
-a = sum(sum(sino));
-maxIndex = find(a==max(a));
-% select 13 slices around max slice
-j = 1;
-for i=(maxIndex-6):(maxIndex+6)
-  if i>0
-    SSRBsino(:,:,j) = SSRBSino(:,:,i);
+if ~maxIndexRef
+  % compress sinogram to 13 slices around max-count-slice
+  % smooth sinogram
+  sino = smooth3(SSRBSino,'gaussian',[5 5 3],1);
+  % find slice with highest number of counts
+  a = sum(sum(sino));
+  maxIndex = find(a==max(a));
+  % select 13 slices around max slice
+  j = 1;
+  for i=(maxIndex-6):(maxIndex+6)
+    if i>0
+      SSRBsino(:,:,j) = SSRBSino(:,:,i);
+    end
+    j = j+1;
   end
-  j = j+1;
+  fprintf('Current max index is %i\r',maxIndex);
+else
+  % select 13 slices around max slice
+  j = 1;
+  for i=(maxIndexRef-6):(maxIndexRef+6)
+    if i>0
+      SSRBsino(:,:,j) = SSRBSino(:,:,i);
+    end
+    j = j+1;
+  end
 end
 
 end
