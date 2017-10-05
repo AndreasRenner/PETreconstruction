@@ -10,26 +10,23 @@ SE = strel('disk',3);
 % Define x-vector for evaluation of fit
 xeval = (1:252);
 
+faktor = 2/(344*252);
+
 for i=1:Nparts
   
-  tic
+  %tic
   
   sino(:,:,:) = sinoTotal(i,:,:,:);
+  a = sum(sum(sino(:,:,7)));
+  sino(:,:,7) = imgaussfilt(sino(:,:,7),2);
   
-  % smooth sinogram
-  %sino = smooth3(sino,'gaussian',[5 5 3],1);
-  
-  % get slice with highest number of counts
-  %a = sum(sum(sino));
-  %index = find(a==max(a));
-
   % calculate threshold for segmentation
-  %threshold = max(a)/(2*344*252);
+  threshold = a*faktor;
 
   % convert this slice to binary image
   % maybe for high countrates the threshold has to be set to 1
-  BW = im2bw(sino(:,:,7),0);
-  clear sino
+  BW = im2bw(sino(:,:,7),threshold);
+  %clear sino
   %figure()
   %imshow(BW)
   
@@ -39,26 +36,37 @@ for i=1:Nparts
   %    to achieve convex behaviour for eache side
   % -> this option has a problem if the curvature on the concarve
   %    side is stronger than on the convex side
+  % -> maybe also have a look at boundary()
   
   % perform a morphological close operation on the image
-  BW = imclose(BW,SE);
-
-  BW = bwpropfilt(BW,'FilledArea',1,'largest');
+  BW = imclose(BW,SE);  
+  %figure();
+  %imshow(BW)
   
-  %figure();
-  %imshow(BW)
+  % reduce image using SE to get rid of rough edges
   BW = imerode(BW,SE);
+
+  % select larges area of image
+  BW = bwpropfilt(BW,'FilledArea',1,'largest');
   %figure();
   %imshow(BW)
+
+  % restore initial size of image
   BW = imdilate(BW,SE);
   
   % extract edges from binary image
   BWedge = edge(BW,'Sobel');
+  %figure();
+  %imshow(BWedge)
 
   % extract and return 2 longest edges
   BW1 = bwpropfilt(BWedge,'Extent',1,'largest');
   BW2 = bwpropfilt(BWedge,'Extent',2,'largest');
   BW2 = logical(BW2-BW1);
+  %figure();
+  %imshow(BW1)
+  %figure();
+  %imshow(BW2);
   
   [y1,x1] = find(BW1);
   [y2,x2] = find(BW2);
@@ -91,6 +99,26 @@ for i=1:Nparts
   elseif (splitF1<50 && splitF2<50)
     % check which line is the lower one
     if eval1(splitF1)<eval2(splitF2)
+      line1(i,:) = eval1(:)';
+      line2(i,:) = eval2(:)';
+    else
+      % change number of eval (1->2;2->1)
+      line1(i,:) = eval2(:)';
+      line2(i,:) = eval1(:)';
+    end
+  elseif (splitF1<50 && splitF2>202)
+    % check which line is the lower one
+    if eval1(splitF1)<eval2(splitF1)
+      line1(i,:) = eval1(:)';
+      line2(i,:) = eval2(:)';
+    else
+      % change number of eval (1->2;2->1)
+      line1(i,:) = eval2(:)';
+      line2(i,:) = eval1(:)';
+    end
+  elseif (splitF1>202 && splitF2<50)
+    % check which line is the lower one
+    if eval1(splitF1)>eval2(splitF1)
       line1(i,:) = eval1(:)';
       line2(i,:) = eval2(:)';
     else
@@ -187,15 +215,15 @@ for i=1:Nparts
       
   end
   
-  toc
+  %toc
         
-  figure
-  imshow(BW);
-  hold on
-  plot(xeval,eval1)
-  hold on
-  plot(xeval,eval2)
-  hold off
+  %figure
+  %imshow(BW);
+  %hold on
+  %plot(xeval,eval1)
+  %hold on
+  %plot(xeval,eval2)
+  %hold off
   
   clear newx1
   clear newx2
