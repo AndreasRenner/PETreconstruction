@@ -1,4 +1,4 @@
-function SSRB_add_Scans(filename)
+function SSRB_add_Scans(filename,emission)
 
 % Basic Parameters of Siemens Biograph mMR
 Nbins   = 344;         % Number of radial bins (NRAD)
@@ -8,6 +8,9 @@ Nslices = 127;         % Number of slices (2*Nrings -1)
 % Number of sinogram parts within one scan
 Nparts = 160;
 parts  = Nparts/20;
+
+% Halflife of FDG in [s]
+halflifeFDG = 6586.2;
 
 % Add time from filling of Pellet to start of total scan
 if     strcmp(filename, '05BlankFast')
@@ -39,6 +42,47 @@ elseif strcmp(filename, '02TransPhantom2')
 elseif strcmp(filename, '03TransPhantom1')
   decayCor = 3668;
   Nscans = 7;
+elseif strcmp(filename, '04TransPhantom2HOT')
+  decayCor = 6231;
+  Nscans = 7;
+  dataFolder='/media/andreas/CorneaOCT_StudyData2/04TransPhantom2HOT_160';
+  mainFolder=cd(dataFolder);
+end
+
+% If emission-data is present - read emission sinogram
+if emission 
+  cd(mainFolder); 
+  
+  tstart = 311.96;
+  acqtime= 317.977;
+  
+  % (1) DECAY CORRECTION
+  decayF   = 2^(-(decayCor+tstart+acqtime/2)/halflifeFDG);
+  % (2) SCAN-TIME CORRECTION
+  meantime = 1;
+  timeF    = meantime/(acqtime*1.2); %factor 1.2 is because of overlap
+  % -> if there is no overlap skip factor 1.2
+  % (3) SCAN-NUMBER CORRECTION
+  scanNumCor = 10;
+  
+  totalCorF = scanNumCor*timeF/decayF;
+  
+  sinoEm = zeros(Nbins,Nproj,Nslices);
+  nameEm = 'sino_SSRB_04TransPhantom2HOTstart_311960_acqtime_317977.raw';
+  fid = fopen(nameEm,'r');
+  for i=1:Nslices
+    sinoEm2D = fread(fid,[Nbins,Nproj],'float32');
+    SIN2D = double(sinoEm2D)*totalCorF;
+    sinoEm(:,:,i) = sinoEm(:,:,i) + SIN2D;
+  end
+  fclose(fid);
+  
+  name = strcat('SSRB_cor_Emission',filename,'.raw');
+  fid = fopen(name,'w');
+  fwrite(fid,sinoEm,'float32');
+  fclose(fid);
+  
+  cd(dataFolder);
 end
 
 % Load all Files into a list
@@ -46,7 +90,7 @@ name = strcat('sino_SSRB_',filename,'_*_*.raw');
 d = dir(name);
 filenames = {d.name};
 
-%cd(mainFolder);
+cd(mainFolder);
 
 difference = zeros(Nscans*20,1);
 k=0;
@@ -59,7 +103,6 @@ for i=1:Nscans
   end
 end
 
-halflifeFDG= 6586.2;   % halflife of FDG in [s]
 decayF     = zeros(Nparts*Nscans,1);
 timeF      = zeros(Nparts*Nscans,1);
 timespan   = zeros(Nparts*Nscans,1);
@@ -84,7 +127,7 @@ end
 
 % (1) DECAY CORRECTION
 % calculate decay correction factor for each part
-for i=1:(Nparts*Nscans)
+parfor i=1:(Nparts*Nscans)
   tmpfile = cell2mat(filenames(i));
   fileinfo = strsplit(tmpfile,'_');
   numinfo = cell2mat(fileinfo(5));
@@ -122,7 +165,7 @@ for i=1:Nparts
   % Find indices of pairs
   indices  = find(partnumber==i); 
   
-  %cd(dataFolder);
+  cd(dataFolder);
   
   for j=1:Nscans
     k = indices(j);
@@ -138,7 +181,12 @@ for i=1:Nparts
     fclose(fid);
   end
   
-  %cd(mainFolder);
+  cd(mainFolder);
+
+  if emission
+    % subtract emission data
+    SSRBSino = SSRBSino - sinoEm;
+  end
   
   % Fil Crystal Gaps (using inpaint)
   SINR = double(SSRBSino);
@@ -150,7 +198,7 @@ for i=1:Nparts
   nnogap=0;
   for ith=1:Nproj
     for ir=1:Nbins
-      if (MASK(ir,ith)<0.01)     
+      if (MASK(ir,ith)==0.0)     
         ngap=ngap+1;    
       MASK(ir,ith)=0.0;
     else
@@ -159,7 +207,7 @@ for i=1:Nparts
       end
     end
   end  
-  for u=1:Nslices
+  parfor u=1:Nslices
     SIN=SINR(:,:,u);
     SIN(MASK==0.)=nan;
     SIN2=inpaint_nans(SIN,2);
@@ -290,6 +338,7 @@ for i=1:Nparts
   fclose(fid1);
   %fclose(fid2);
 end
+
 % Write Sinogram to file
 name = strcat('SSRB_complete_', filename,'.raw');
 fid3 = fopen(name, 'w');
