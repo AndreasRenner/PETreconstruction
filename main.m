@@ -1,12 +1,18 @@
 function main(filenameB,filenameT)
 
-% Basic Parameters of Siemens Biograph mMR
+%% Basic Parameters
+% of Siemens Biograph mMR
 Nbins   = 344;         % Number of radial bins (NRAD)
 Nproj   = 252;         % Number of projections (NANG)
 Nslices =  13;         % Number of SSRB sinogram planes
+% other parameters
 Nparts  = 500;         % Number of parts per scan
+halflifeFDG = 6586.2;   % halflife of FDG in [s]
 
-% Load information about Blank acquisition
+
+%% B L A N K   S C A N
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Load information about Blank acquisition
 if     strcmp(filenameB,'05BlankFast')
   decayCor = 3471;
   NscansB  = 10;
@@ -18,27 +24,93 @@ elseif strcmp(filenameB,'01Blank')
   direction= 1;
 end
 
-sinoTotal = zeros(Nparts,Nbins,Nproj,Nslices);
+%% Allocate memory for Blank acquisition
+decayF     = zeros(Nparts,1);
+sinoTotalB = zeros(Nparts,Nbins,Nproj,Nslices);
+tstartB    = zeros(Nparts,NscansB);
+tstopB     = zeros(Nparts,NscansB);
 
+%% Read First Scan of Blank acquisition
 % For first Scan do not perform adaption of position
 % -> first Scan is used as reference
-[sino,index] = readScan(filenameB,1,NscansB,Nparts,faktor(1),0);
-sinoTotal = sinoTotal + sino;
+[sino,indexref,tstart,tstop] = readScan(filenameB,1,NscansB,Nparts, ...
+    faktor(1),0,direction,0,0);
+
+%% DECAY CORRECTION
+durrationRef = tstop-tstart;
 for i=1:Nparts
-  fprintf('For part %i max index is %i\r', i, index(i));
+  decayF(i) = 2^(-(decayCor+tstart(i)+durrationRef(i)/2)/halflifeFDG);
+  sino(i,:,:,:) = sino(i,:,:,:)*decayF(i);
 end
+% No scan-time correction for this scan, as this scan-time
+% is used as reference and a constant value for all parts
 
-[line1,line2] = sino2line(sinoTotal,Nparts);
+%% Save files for visual check
+%for i=1:Nparts
+%  name = strcat('Scan1_',num2str(i));
+%  SSRBSino(:,:,:)=sino(i,:,:,:);
+%  newName = strcat('sino_SSRB_', name, '.raw');
+%  fid = fopen(newName,'w');
+%  fwrite(fid,SSRBSino,'float32');
+%  fclose(fid);
+%  clear SSRBSino;
+%end
 
-% For other Scans perform adaption of position
+%%
+sinoTotalB = sinoTotalB + sino;
+
+%%
+tstartB(:,1) = tstart(:);
+tstopB(:,1)  = tstop(:);
+
+%% Calculate sinogram window times for reference
+tic
+[line1and2] = sino2line(sino,Nparts,1);
+toc
+
+%% For other Scans perform adaption of position
 kumFaktor = faktor(1);
 for i=2:(NscansB-1)
-  offset = uint64(ceil(Npos*kumFaktor))*4;
-  [sino,index] = readScan(filenameB,i,NscansB,Nparts,faktor(i),offset);
+  if direction
+    direction = 0;
+  else
+    direction = 1;
+  end
+  [sino,~,tstart,tstop] = readScan(filenameB,i,NscansB,Nparts, ...
+      faktor(i),kumFaktor,direction,line1and2,indexref);
+  
+  %% DECAY CORRECTION + SCAN-TIME CORRECTION
+  durration = tstop-tstart;
+  scanTcor  = durrationRef./durration;
+  for j=1:Nparts
+    decayF(j) = 2^(-(decayCor+tstart(j)+durration(j)/2)/halflifeFDG);
+    sino(j,:,:,:) = sino(j,:,:,:)*decayF(j)*scanTcor(j);
+  end
+  
+  %% Save files for visual check
+  for j=1:Nparts
+    name = strcat('Scan',num2str(i),'_',num2str(j));
+    SSRBSino(:,:,:)=sino(j,:,:,:);
+    newName = strcat('sino_SSRB_', name, '.raw');
+    fid = fopen(newName,'w');
+    fwrite(fid,SSRBSino,'float32');
+    fclose(fid);
+    clear SSRBSino;
+  end
+  
+  %% add new sinograms to total sinogram
+  sinoTotalB = sinoTotalB + sino;
+  %% add times for decay correction
+  tstartB(:,i) = tstart(:);
+  tstopB(:,i)  = tstop(:);
+  %%
   kumFaktor = kumFaktor + faktor(i);
 end
 
-% Load information about Transmission acquisition
+
+%% T R A N S M I S S I O N   S C A N
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Load information about Transmission acquisition
 if     strcmp(filenameT,'02TransPhantom1')
   decayCor = 2234;
   NscansT  = 2;
@@ -65,13 +137,52 @@ elseif strcmp(filename, '04TransPhantom2HOT')
   direction= 0;
 end
 
+%% Allocate memory for Transmission acquisition
+decayF     = zeros(Nparts,1);
+sinoTotalT = zeros(Nparts,Nbins,Nproj,Nslices);
+tstartT    = zeros(Nparts,NscansB);
+tstopT     = zeros(Nparts,NscansB);
+
+%% For transmission scans perform adaption of position
+kumFaktor = 0;
 for i=1:NscansT
     
+  [sino,~,tstart,tstop] = readScan(filenameT,i,NscansT,Nparts, ...
+      faktor(i),kumFaktor,direction,line1and2,indexref);
+  
   if direction
     direction = 0;
   else
     direction = 1;
   end
+  
+  %% DECAY CORRECTION + SCAN-TIME CORRECTION
+  durration = tstop-tstart;
+  scanTcor  = durrationRef./durration;
+  for j=1:Nparts
+    decayF(j) = 2^(-(decayCor+tstart(j)+durration(j)/2)/halflifeFDG);
+    sino(j,:,:,:) = sino(j,:,:,:)*decayF(j)*scanTcor(j);
+  end
+  
+  %% Save files for visual check
+  for j=1:Nparts
+    name = strcat('ScanTrans',num2str(i),'_',num2str(j));
+    SSRBSino(:,:,:)=sino(j,:,:,:);
+    newName = strcat('sino_SSRB_', name, '.raw');
+    fid = fopen(newName,'w');
+    fwrite(fid,SSRBSino,'float32');
+    fclose(fid);
+    clear SSRBSino;
+  end
+  
+  %% add new sinograms to total sinogram
+  sinoTotalT = sinoTotalT + sino;
+  %% add times for decay correction
+  tstartT(:,i) = tstart(:);
+  tstopT(:,i)  = tstop(:);
+
+  %%
+  kumFaktor = kumFaktor + faktor(i);
 end
 
 end
