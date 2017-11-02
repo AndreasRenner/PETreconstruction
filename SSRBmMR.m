@@ -68,6 +68,7 @@ else
     end
     j = j+1;
   end
+  maxIndex=0;
 end
 
 end
