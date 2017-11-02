@@ -1,5 +1,9 @@
-function [sinoTotal,maxIndex]=readScan(filename,Nscan,Nscans,Nparts,...
-    faktor,offset)
+function [sinoTotal,maxIndex,tstart,tstop]=readScan(filename, ...
+    Nscan,Nscans,Nparts,faktor,kumFaktor,direction, ...
+    line1and2ref,maxIndexRef)
+
+acqTime01Blank1 = 80170;
+tpart = acqTime01Blank1/Nparts;
 
 % Estimate Number of Tags from Filesize
 file  = strcat(filename,'.bf');
@@ -12,6 +16,7 @@ Nread = ceil(Npos*faktor); % for 04HOT
 fprintf('Number of Tags per read: %u\r\n',Nread);
 fid   = fopen(file,'r');
 
+offset = uint64(ceil(Npos*kumFaktor))*4;
 fseek(fid,offset,'bof');
 
 dlist = fread(fid,[Nread],'uint32');
@@ -42,26 +47,222 @@ catch ME
   end
 end
 
-tstart = minlist(1);
-tstop = minlist(21);
+scanstart = minlist(1);
+scanstop  = minlist(21);
+% calculate conversionfactor for reference scan time
+scantimef = (scanstop-scanstart)/acqTime01Blank1;
 
 sinoTotal = zeros(Nparts,344,252,13);
 maxIndex  = zeros(Nparts,1);
-cut1 = tstart;
-tlen = (tstop-tstart)/Nparts;
+tstart    = zeros(Nparts,1);
+tstop     = zeros(Nparts,1);
+cut1 = scanstart;
+tlen = (scanstop-scanstart)/Nparts;
+
 for j=1:Nparts
-  cut2 = cut1 + tlen;
-  dlistcut = cutlmdata(dlist,round(cut1),round(cut2));
+  fprintf('Part %s:\r',num2str(j));
+  line1and2new = zeros(1,2,2523);
+  
+  if ~tstart(j)
+    tstart(j)= round(cut1);
+    cut2 = cut1 + tlen;
+  else
+    cut2 = tstart(j) + tlen;
+  end
+  tstop(j) = round(cut2);
+  dlistcut = cutlmdata(dlist,tstart(j),tstop(j));
   cut1 = cut2;
   sino = makeSinoRandomSubstraction(dlistcut);
   clear dlistcut;
   
-  [SSRBsino,maxIndex(j)] = SSRBmMR(sino);
-  clear sino;
-  sinoTotal(j,:,:,:) = SSRBsino;
+  if ~line1and2ref
+    [SSRBsino,maxIndex(j)] = SSRBmMR(sino,0);
+    clear sino;
+    sinoTotal(j,:,:,:) = SSRBsino;
+  else
+    %fprintf('Entering Sinogram-Window registration\r');
+    if direction
+      [SSRBsino,~] = SSRBmMR(sino,maxIndexRef(j));
+      line1ref = line1and2ref(j,1,:);
+      line2ref = line1and2ref(j,2,:);
+    else
+      [SSRBsino,~] = SSRBmMR(sino,maxIndexRef((Nparts+1)-j));
+      line1ref = line1and2ref((Nparts+1)-j,1,:);
+      line2ref = line1and2ref((Nparts+1)-j,2,:);
+    end
+    clear sino;
+    % Check present sinogram window
+    % calculate pixel2time faktor
+    p2tfaktor = tpart/30; %line1ref(end);
+    % get line1 and line2 of new scan
+    [line1and2new] = sino2line(SSRBsino,j,j);
+    difstart  = calculatedif(line1ref,line1and2new(1,1,:));
+    difstop   = calculatedif(line2ref,line1and2new(1,2,:));
+    if abs(difstart-difstop)>20
+      fprintf('Wrong line selected - I will try again\r');
+      difstart  = calculatedif(line2ref,line1and2new(1,1,:));
+      difstop   = calculatedif(line1ref,line1and2new(1,2,:));
+    end
+    if difstart<0
+      if direction
+        newstart  = tstart(j) - abs(difstart)*p2tfaktor*scantimef;
+      else
+        newstart  = tstart(j) + abs(difstart)*p2tfaktor*scantimef;
+      end
+    else
+      if direction
+        newstart  = tstart(j) + difstart*p2tfaktor*scantimef;
+      else
+        newstart  = tstart(j) - difstart*p2tfaktor*scantimef;
+      end
+    end
+    if difstop <0
+      if direction
+        newstop   = tstop(j)  - abs(difstop)*p2tfaktor*scantimef;
+      else
+        newstop   = tstop(j)  + abs(difstop)*p2tfaktor*scantimef;
+      end
+    else
+      if direction
+        newstop   = tstop(j)  + difstop*p2tfaktor*scantimef;
+      else
+        newstop   = tstop(j)  - difstop*p2tfaktor*scantimef;
+      end
+    end
+  
+    if abs(difstart)<1 && abs(difstop)<1 % corresponds to 3% error; corresponds to 1 pixel
+      if direction
+        sinoTotal(j,:,:,:) = SSRBsino;
+      else
+        sinoTotal((Nparts+1)-j,:,:,:) = SSRBsino;
+      end
+    else
+      clear SSRBsino;
+      fprintf('Time start was: %7.0f\r',tstart(j));
+      fprintf('Time stop  was: %7.0f\r',tstop(j));
+      tstart(j)= newstart;
+      tstop(j) = newstop;
+      fprintf('Time start is:  %7.0f\r',tstart(j));
+      fprintf('Time stop  is:  %7.0f\r',tstop(j));
+      if j<Nparts
+        tstart(j+1) = newstop;
+      end
+      dlistcut = cutlmdata(dlist,tstart(j),tstop(j));
+      sino = makeSinoRandomSubstraction(dlistcut);
+      clear dlistcut;
+      
+      if direction
+        [SSRBsino,~] = SSRBmMR(sino,maxIndexRef(j));
+        sinoTotal(j,:,:,:) = SSRBsino;
+      else
+        [SSRBsino,~] = SSRBmMR(sino,maxIndexRef((Nparts+1)-j));
+        sinoTotal((Nparts+1)-j,:,:,:) = SSRBsino;
+      end
+      clear sino;
+    end
+  end
+  fprintf('\r');
+  
 end
 
 fclose(fid);
+
+end
+
+% -------------------------------------------------------
+% calculate difference between present scan and reference scan
+function dif = calculatedif(lineref,linenew)
+splitF1 = lineref(end-1);
+evalpnt = linenew(end);
+%fprintf('Maximum Ref. is %f\r',splitF1);
+%fprintf('Evaluation point is %f\r',evalpnt);
+
+if splitF1>126
+  pline1 = find(abs(lineref(1:end-2)-evalpnt)<0.11,1,'first')/10;
+  pline2 = find(abs(linenew(1:end-2)-evalpnt)<0.11,1,'first')/10;
+  if isempty(pline1)
+    fprintf('Did not find anything for pline1\r');
+    pline1 = find(abs(lineref(1:end-2)-evalpnt)<0.21,1,'first')/10;
+  elseif isempty(pline2)
+    fprintf('Did not find anything for pline2\r');
+    pline2 = find(abs(linenew(1:end-2)-evalpnt)<0.21,1,'first')/10;
+  end
+else
+  pline1 = find(abs(lineref(1:end-2)-evalpnt)<0.11,1,'last')/10;
+  pline2 = find(abs(linenew(1:end-2)-evalpnt)<0.11,1,'last')/10;
+  if isempty(pline1)
+    fprintf('Did not find anything for pline1\r');
+    pline1 = find(abs(lineref(1:end-2)-evalpnt)<0.21,1,'last')/10;
+  elseif isempty(pline2)
+    fprintf('Did not find anything for pline2\r');
+    pline2 = find(abs(linenew(1:end-2)-evalpnt)<0.21,1,'last')/10;
+  end
+end
+
+
+dif = pline1 - pline2;
+fprintf('Difference is %f (%3.1f - %3.1f)\r',dif,pline1,pline2);
+if dif>40
+  fprintf('STOP\r');
+end
+
+end
+
+
+% -------------------------------------------------------
+% calculate difference between present scan and reference scan
+function dif = calculatedifold(lineref,linenew)
+splitF1 = lineref(2522);
+splitF2 = linenew(2522);
+
+% find optimal point to get difference
+if splitF1>132 && splitF2>120
+  point1 = (lineref(1)+linenew(1))/2;
+  point2 = (lineref(splitF1*10)+linenew(splitF2*10))/2;
+  difpnt = round((point1+point2)/2);
+  pline1 = find(abs(lineref-difpnt)<0.11,1,'first')/10;
+  pline2 = find(abs(linenew-difpnt)<0.11,1,'first')/10;
+elseif splitF1>120 && splitF2>132
+  point1 = (lineref(1)+linenew(1))/2;
+  point2 = (lineref(splitF1*10)+linenew(splitF2*10))/2;
+  difpnt = round((point1+point2)/2);
+  pline1 = find(abs(lineref-difpnt)<0.11,1,'first')/10;
+  pline2 = find(abs(linenew-difpnt)<0.11,1,'first')/10;
+elseif splitF1>222 && splitF2<30
+  point1 = (lineref(1)+linenew(1))/2;
+  point2 = (lineref(2521)+linenew(2521))/2;
+  difpnt = round((point1+point2)/2);
+  pline1 = find(abs(lineref-difpnt)<0.11,1,'first')/10;
+  pline2 = find(abs(linenew-difpnt)<0.11,1,'first')/10;
+elseif splitF1<30 && splitF2>222
+  point1 = (lineref(1)+linenew(1))/2;
+  point2 = (lineref(2521)+linenew(2521))/2;
+  difpnt = round((point1+point2)/2);
+  pline1 = find(abs(lineref-difpnt)<0.11,1,'first')/10;
+  pline2 = find(abs(linenew-difpnt)<0.11,1,'first')/10;   
+else
+  point1 = (lineref(2521)+linenew(2521))/2;
+  point2 = (lineref(splitF1*10)+linenew(splitF2*10))/2;
+  difpnt = round((point1+point2)/2);
+  pline1 = find(abs(lineref-difpnt)<0.11,1,'last')/10;
+  pline2 = find(abs(linenew-difpnt)<0.11,1,'last')/10;
+end
+
+if isempty(pline1)
+  fprintf('Did not find anything for pline1\r');
+  line(:) = lineref(1,1,1:2521);
+  xeval2 = (0:0.1:252);
+  figure();
+  plot(xeval2,line);
+elseif isempty(pline2)
+  fprintf('Did not find anything for pline2\r');
+  line(:) = linenew(1,1,1:2521);
+  xeval2 = (0:0.1:252);
+  figure();
+  plot(xeval2,line);
+end
+dif = pline1 - pline2;
+fprintf('Difference is %f (%3.1f - %3.1f)\r',dif,pline1,pline2);
 
 end
 
@@ -131,7 +332,6 @@ for k=1:Nplanes
   end
 end
 end
-
 
 % -------------------------------------------------------
 % Cut the first X and after Y ms of acquisition
