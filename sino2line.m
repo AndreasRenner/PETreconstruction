@@ -2,15 +2,18 @@ function [line1and2] = sino2line(sinoTotal,Nparts,Nstart)
 
 % -> create disk-shaped structuring element SE to preserve
 %    round edges of BW object
-SEs = strel('disk',2);
+SEs = strel('disk',2); % for blank
+%SEs = strel('disk',4); % for emission
 SEb = strel('disk',3);
+%SEb = strel('disk',4);
 
 % Define x-vector for evaluation of fit
 xeval = (1:252);
 xeval2 = (0:0.1:252);
 line1and2 = zeros((Nparts-Nstart+1),2,length(xeval2)+2);
 
-faktor = 1.9/(344*252);
+%faktor = 1.9/(344*252); % for blank
+faktor = 1.6/(344*252); % for emission
 
 for i=Nstart:Nparts
   
@@ -24,6 +27,8 @@ for i=Nstart:Nparts
     name = strcat('BWedge_Scan1_',num2str(i),'.raw');
   end
   a = sum(sum(sino(:,:,7)));
+  
+  sino = smooth3(sino,'gaussian',[5 5 5],1.5);  
   sino(:,:,7) = imgaussfilt(sino(:,:,7),2);
   
   % calculate threshold for segmentation
@@ -57,7 +62,7 @@ for i=Nstart:Nparts
   %imshow(BW)
   
   % select larges area of image
-  BW = bwpropfilt(BW,'FilledArea',1,'largest');
+  %BW = bwpropfilt(BW,'FilledArea',1,'largest');
   %figure();
   %imshow(BW)
 
@@ -65,37 +70,79 @@ for i=Nstart:Nparts
   BW = imerode(BW,SEb);
   %figure();
   %imshow(BW)
+  
+  % select areas larger than 50 pixel
+  BW = bwareaopen(BW,50);
+  
   % restore initial size of image
   BW = imdilate(BW,SEs);
+  %figure();
+  %imshow(BW)
+  % perform a morphological close operation on the image
   
+  BW = imclose(BW,SEb); %for emission
+  
+  %figure();
+  %imshow(BW)
+
   % extract edges from binary image
-  BWedge = edge(BW,'Sobel');
+  %BWedge = edge(BW,'Sobel');
   %figure();
   %imshow(BWedge)
-  
-  fid = fopen(name,'w');
-  fwrite(fid,BWedge,'float32');
-  fclose(fid);
 
   % extract and return 2 longest edges
-  BW1 = bwpropfilt(BWedge,'Extent',1,'largest');
-  BW2 = bwpropfilt(BWedge,'Extent',2,'largest');
-  BW2 = logical(BW2-BW1);
+  %BW1 = bwpropfilt(BWedge,'Extent',1,'largest');
+  %BW2 = bwpropfilt(BWedge,'Extent',2,'largest');
+  %BW2 = logical(BW2-BW1);
   %figure();
   %imshow(BW1)
   %figure();
   %imshow(BW2);
   
-  [y1,x1] = find(BW1);
-  [y2,x2] = find(BW2);
+  index = 1;
+  controlindex = 1;
+  for j=1:252
+    point1 = find(BW(:,j),1,'first');
+    point2 = find(BW(:,j),1,'last');
+    if point1
+      y1(index) = point1;
+      y2(index) = point2;
+      x1(index) = j;
+      index = index + 1;
+    else
+      fprintf('We have a hole in the edges detected (at j=%i).\r',j);
+      controlindex = controlindex + 1;
+    end
+  end
   
-  fit1 = fit(x1,y1,'poly4');
-  fit2 = fit(x2,y2,'poly4');
+%  if controlindex > 10
+%    figure();
+%    imshow(BW);
+%  end
+  
+  %figure()
+  %plot(xeval,y1)
+  %hold on
+  %plot(xeval,y2)
+  %hold off
+  
+  fit1 = fit(x1',y1','poly4');
+  fit2 = fit(x1',y2','poly4');
   
   eval1 = feval(fit1,xeval);
   eval2 = feval(fit2,xeval);
   eval1h = feval(fit1,xeval2);
   eval2h = feval(fit2,xeval2);
+  
+  % output edge and fit to file for visual check
+  BW = double(BW);
+  for j=1:252
+    BW(round(eval1(j)),j) = 2;
+    BW(round(eval2(j)),j) = 2;
+  end
+  fid = fopen(name,'w');
+  fwrite(fid,BW,'float32');
+  fclose(fid);
     
   % calculate derivative do get split point
   deriv1 = differentiate(fit1,xeval);
