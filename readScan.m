@@ -61,8 +61,9 @@ tlen = (scanstop-scanstart)/Nparts;
 
 for j=1:Nparts
   fprintf('Part %s:\r',num2str(j));
-  line1and2new = zeros(1,2,2523);
-  
+  %line1and2new = zeros(1,2,2523); %for Blank
+  % tstart is only assigned a value if previous value is 0
+  % otherwise it hase the value obtained from registration
   if ~tstart(j)
     tstart(j)= round(cut1);
     cut2 = cut1 + tlen;
@@ -95,38 +96,49 @@ for j=1:Nparts
     % calculate pixel2time faktor
     p2tfaktor = tpart/30; %line1ref(end);
     % get line1 and line2 of new scan
-    [line1and2new] = sino2line(SSRBsino,j,j);
-    difstart  = calculatedif(line1ref,line1and2new(1,1,:));
-    difstop   = calculatedif(line2ref,line1and2new(1,2,:));
+    %[line1and2new] = sino2line(SSRBsino,j,j); %forBlank
+    [line1and2new] = sino2lineEM(SSRBsino,j,j);
+    line1new(:,1) = line1and2new(:,1);
+    line1new(:,2) = line1and2new(:,2);
+    line2new(:,1) = line1and2new(:,1);
+    line2new(:,2) = line1and2new(:,3);
+    %difstart  = calculatedif(line1ref,line1and2new(1,1,:));
+    %difstop   = calculatedif(line2ref,line1and2new(1,2,:));
+    difstart  = calculatedifEM(line1ref,line1new);
+    difstop   = calculatedifEM(line2ref,line2new);
     if abs(difstart-difstop)>20
       fprintf('Wrong line selected - I will try again\r');
-      difstart  = calculatedif(line2ref,line1and2new(1,1,:));
-      difstop   = calculatedif(line1ref,line1and2new(1,2,:));
+      difstart  = calculatedifEM(line2ref,line1new);
+      difstop   = calculatedifEM(line1ref,line2new);
+      %difstart  = calculatedif(line2ref,line1and2new(1,1,:));
+      %difstop   = calculatedif(line1ref,line1and2new(1,2,:));
     end
+    clear line1new;
+    clear line2new;
     if difstart<0
       if direction
-        newstart  = tstart(j) - abs(difstart)*p2tfaktor*scantimef;
+        newstart = tstart(j) - abs(difstart)*p2tfaktor*scantimef;
       else
-        newstart  = tstart(j) + abs(difstart)*p2tfaktor*scantimef;
+        newstart = tstart(j) + abs(difstart)*p2tfaktor*scantimef;
       end
     else
       if direction
-        newstart  = tstart(j) + difstart*p2tfaktor*scantimef;
+        newstart = tstart(j) + difstart*p2tfaktor*scantimef;
       else
-        newstart  = tstart(j) - difstart*p2tfaktor*scantimef;
+        newstart = tstart(j) - difstart*p2tfaktor*scantimef;
       end
     end
     if difstop <0
       if direction
-        newstop   = tstop(j)  - abs(difstop)*p2tfaktor*scantimef;
+        newstop = tstop(j) - abs(difstop)*p2tfaktor*scantimef;
       else
-        newstop   = tstop(j)  + abs(difstop)*p2tfaktor*scantimef;
+        newstop = tstop(j) + abs(difstop)*p2tfaktor*scantimef;
       end
     else
       if direction
-        newstop   = tstop(j)  + difstop*p2tfaktor*scantimef;
+        newstop = tstop(j) + difstop*p2tfaktor*scantimef;
       else
-        newstop   = tstop(j)  - difstop*p2tfaktor*scantimef;
+        newstop = tstop(j) - difstop*p2tfaktor*scantimef;
       end
     end
   
@@ -169,6 +181,10 @@ fclose(fid);
 
 end
 
+% *******************************************************
+% ***         H E L P E R   F U N C T I O N S         ***
+% *******************************************************
+
 % -------------------------------------------------------
 % calculate difference between present scan and reference scan
 function dif = calculatedif(lineref,linenew)
@@ -208,6 +224,85 @@ end
 
 end
 
+% -------------------------------------------------------
+% calculate difference between present scan and reference scan
+function dif = calculatedifEM(lineref,linenew)
+index = 1;
+metricInit = 0;
+for i=1:length(linenew(:,1))
+  if lineref(linenew(i,1)*10+1)
+    localdif = abs(linenew(i,2)-lineref(linenew(i,1)*10+1));
+    if localdif>1
+      metricInit = metricInit + sqrt(localdif);
+    else
+      metricInit = metricInit + localdif;
+    end
+    index = index + 1;
+  end
+end
+metricInit = metricInit/index;
+
+metricPlus = 0;
+metricMinus= 0;
+plus = 1;
+minus= 1;
+
+metricOld = metricInit;
+while metricPlus<metricInit
+  index = 1;
+  for i=1:length(linenew(:,1))
+    if ((i+plus)*10+1)<2522 && (i+plus)<length(linenew(:,1))
+      localdif = abs(linenew(i,2)-lineref(linenew(i+plus,1)*10+1));
+      if localdif>1
+        metricPlus = metricPlus + sqrt(localdif);
+      else
+        metricPlus = metricPlus + localdif;
+      end
+      index = index + 1;
+    end
+  end
+  metricPlus = metricPlus/index;
+  if metricOld<metricPlus
+    break
+  end
+  metricOld = metricPlus;
+  plus = plus + 1;
+end
+
+if plus == 1
+  metricOld = metricInit;
+  while metricMinus<metricInit
+    index = 1;
+    for i=1:length(linenew(:,1))
+      if (i-minus)>0
+        localdif = abs(linenew(i,2)-lineref(linenew(i-minus,1)*10+1));
+        if localdif>1
+          metricMinus = metricMinus + sqrt(localdif);
+        else
+          metricMinus = metricMinus + localdif;
+        end
+        index = index + 1;
+      end
+    end
+    metricMinus = metricMinus/index;
+    if metricOld<metricMinus
+      break
+    end
+    metricOld = metricMinus;
+    minus = minus + 1;
+  end
+  dif = 0 - minus;
+else
+  dif = plus;
+end
+
+if plus==1 && minus ==1
+  dif = 0;
+end
+
+fprintf('Difference is %f\r',dif);
+
+end
 
 % -------------------------------------------------------
 % calculate difference between present scan and reference scan
@@ -339,8 +434,13 @@ function dlist = cutlmdata(dlist,tstart,tstop)
 % Convert time in [ms] to the format of a Ttag and search for
 % the corresponding position of the Ttag in dlist 
 posx = find(dlist==(int64(tstart)+2^31));
+if ~posx
+  fprintf('Did not find tstart!\r');
+end
 posy = find(dlist==(int64(tstop)+2^31));
-  
+if ~posy
+  fprintf('Did not find tstop!\r');
+end
 % Cut data list
 dlist = dlist(posx:posy);  
 end
