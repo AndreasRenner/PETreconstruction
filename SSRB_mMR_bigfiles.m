@@ -229,7 +229,7 @@ end
 end
 
 % -------------------------------------------------------
-% Make uncompressed Sinogram without random substraction
+% Make uncompressed Sinogram with random substraction
 function sino = makeSinoRandomSubstraction(dlist)
 % Basic Parameters of Siemens Biograph mMR
 Nbins   = 344;         % Number of radial bins (NRAD)
