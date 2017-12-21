@@ -47,15 +47,15 @@ end
 % is used as reference and a constant value for all parts
 
 %% Save files for visual check
-for i=1:Nparts
-  name = strcat('Scan1_',num2str(i));
-  SSRBSino(:,:,:)=sino(i,:,:,:);
-  newName = strcat('sino_SSRB_', name, '.raw');
-  fid = fopen(newName,'w');
-  fwrite(fid,SSRBSino,'float32');
-  fclose(fid);
-  clear SSRBSino;
-end
+%for i=1:Nparts
+%  name = strcat('Scan1_',num2str(i));
+%  SSRBSino(:,:,:)=sino(i,:,:,:);
+%  newName = strcat('sino_SSRB_', name, '.raw');
+%  fid = fopen(newName,'w');
+%  fwrite(fid,SSRBSino,'float32');
+%  fclose(fid);
+%  clear SSRBSino;
+%end
 
 %%
 sinoTotalB = sinoTotalB + sino;
@@ -670,13 +670,13 @@ for j=1:Nparts
       for l=1:(round(lowerlimit(k))-1)
         sinoTotalT(j,l,k,i) = 0.0;
         sinoTotalB(j,l,k,i) = 0.0;
-        sinoTotalE(j,l,k,i) = 0.0;
+        %sinoTotalE(j,l,k,i) = 0.0;
         testMask  (j,l,k,i) = 0;
       end
       for l=round(upperlimit(k)):Nbins
         sinoTotalT(j,l,k,i) = 0.0;
         sinoTotalB(j,l,k,i) = 0.0;
-        sinoTotalE(j,l,k,i) = 0.0;
+        %sinoTotalE(j,l,k,i) = 0.0;
         testMask  (j,l,k,i) = 0;
       end
     end
@@ -690,47 +690,55 @@ toc
 %% make complete sinogram using indexref
 BlankComplete = zeros(Nbins,Nproj,NSliTot);
 TransComplete = zeros(Nbins,Nproj,NSliTot);
-EmissComplete = zeros(Nbins,Nproj,NSliTot);
-MaskComplete  = zeros(Nbins,Nproj,NSliTot);
+%EmissComplete = zeros(Nbins,Nproj,NSliTot);
+%MaskComplete  = zeros(Nbins,Nproj,NSliTot);
 
 for j=1:Nparts
   l = 1;
   sinoAddBlank(:,:,:) = sinoTotalB(j,:,:,:);
   sinoAddTrans(:,:,:) = sinoTotalT(j,:,:,:);
-  sinoAddEmiss(:,:,:) = sinoTotalE(j,:,:,:);
-  sinoAddMask (:,:,:) = testMask  (j,:,:,:);
+  %sinoAddEmiss(:,:,:) = sinoTotalE(j,:,:,:);
+  %sinoAddMask (:,:,:) = testMask  (j,:,:,:);
   for i=(indexref(j)-6):(indexref(j)+6)
     if i>0 && i<=NSliTot
       BlankComplete(:,:,i)=BlankComplete(:,:,i)+sinoAddBlank(:,:,l);
       TransComplete(:,:,i)=TransComplete(:,:,i)+sinoAddTrans(:,:,l);
-      EmissComplete(:,:,i)=EmissComplete(:,:,i)+sinoAddEmiss(:,:,l);
-      MaskComplete (:,:,i)=MaskComplete (:,:,i)+sinoAddMask (:,:,l);
+      %EmissComplete(:,:,i)=EmissComplete(:,:,i)+sinoAddEmiss(:,:,l);
+      %MaskComplete (:,:,i)=MaskComplete (:,:,i)+sinoAddMask (:,:,l);
     end
     l = l+1;
   end
 end
 
+tic
+%% perform median filtering of complete sinogram
+for i=1:NSliTot
+  BlankComplete(:,:,i) = medfilt2(BlankComplete(:,:,i),[3 3]);
+  TransComplete(:,:,i) = medfilt2(TransComplete(:,:,i),[3 3]);
+end
+toc
+
 %% inpaint nans to crystall gaps
 for i=1:NSliTot
   Blank2D(:,:) = BlankComplete(:,:,i);
   Trans2D(:,:) = TransComplete(:,:,i);
-  Emiss2D(:,:) = EmissComplete(:,:,i);
+  %Emiss2D(:,:) = EmissComplete(:,:,i);
   Mask2D(:,:)  = MaskComplete(:,:,i);
   for j=1:Nproj
     for k=1:Nbins
       if Blank2D(k,j)<=0 && Mask2D(k,j)
         Blank2D(k,j) = nan;
         Trans2D(k,j) = nan;
-        Emiss2D(k,j) = nan;
+        %Emiss2D(k,j) = nan;
       end
     end
   end
   Blank2D = inpaint_nans(Blank2D,2);
   Trans2D = inpaint_nans(Trans2D,2);
-  Emiss2D = inpaint_nans(Emiss2D,2);
+  %Emiss2D = inpaint_nans(Emiss2D,2);
   BlankComplete(:,:,i) = Blank2D;
   TransComplete(:,:,i) = Trans2D;
-  EmissComplete(:,:,i) = Emiss2D;
+  %EmissComplete(:,:,i) = Emiss2D;
 end
 
 %% write Blank Complete to file
@@ -752,18 +760,21 @@ fwrite(fid,MaskComplete,'float32');
 fclose(fid);
 
 %% write Emiss Complete to file
-name = strcat('SSRB_emiss_nans',filenameT,'.raw');
-fid = fopen(name,'w');
-fwrite(fid,EmissComplete,'float32');
-fclose(fid);
+%name = strcat('SSRB_emiss_nans',filenameT,'.raw');
+%fid = fopen(name,'w');
+%fwrite(fid,EmissComplete,'float32');
+%fclose(fid);
 
 %% Calculate Ratio of Complete Blank and Transmission Scan
-%BlankComplete = smooth3(BlankComplete,'gaussian',[3 3 3],0.42466);
-%TransComplete = smooth3(TransComplete,'gaussian',[3 3 3],0.42466);
+BlankComplete = smooth3(BlankComplete,'gaussian',[3 3 3],0.42466);
+TransComplete = smooth3(TransComplete,'gaussian',[3 3 3],0.42466);
+% medfilt3 was introduced in R2016b
+%BlankComplete = medfilt3(BlankComplete,[5 5 3]);
+%TransComplete = medfilt3(TransComplete,[5 5 3]);
 %EmissComplete = smooth3(EmissComplete,'gaussian',[3 3 3],0.42466);
-BlankComplete = smooth3(BlankComplete,'gaussian',[5 5 5],1);
-TransComplete = smooth3(TransComplete,'gaussian',[5 5 5],1);
-EmissComplete = smooth3(EmissComplete,'gaussian',[5 5 5],1);
+%BlankComplete = smooth3(BlankComplete,'gaussian',[5 5 5],1);
+%TransComplete = smooth3(TransComplete,'gaussian',[5 5 5],1);
+%EmissComplete = smooth3(EmissComplete,'gaussian',[5 5 5],1);
 
 % correct for axial sensitivity of emission scan
 %for l = 1:NSliTot
@@ -777,7 +788,7 @@ EmissComplete = smooth3(EmissComplete,'gaussian',[5 5 5],1);
 %end
 
 % Substrat emission sinogram from transmission scan
-TransComplete = TransComplete - EmissComplete;
+%TransComplete = TransComplete - EmissComplete;
 
 SinoRatio = zeros(Nbins,Nproj,NSliTot,'double');
 
@@ -802,19 +813,25 @@ fid = fopen(name,'w');
 fwrite(fid,SinoRatio,'float32');
 fclose(fid);
 
-%% Reconstruction of RatioComplete
-filenameMask  = 'SSRB_997ratio_mask_600_04TransPhantom2HOT.raw';
-SinoRatio = FillSinoGaps(name,filenameMask);
-%SinoRatio = smooth3(SinoRatio,'gaussian',[3 3 3],0.42466);
-%SinoRatio = smooth3(SinoRatio,'gaussian',[5 5 5],1);
+%% perform median filtering of sino ratio
+%for i=1:NSliTot
+%  SinoRatio(:,:,i) = medfilt2(SinoRatio(:,:,i),[3 3]);
+%end
 
-name = strcat('SSRB_ratio_nans_',filenameT,'.raw');
+%% Reconstruction of RatioComplete
+%filenameMask  = 'SSRB_997ratio_mask_600_04TransPhantom2HOT.raw';
+filenameMask  = 'SSRB_mask_02TransPhantom2.raw';
+SinoRatio = FillSinoGaps(name,filenameMask);
+SinoRatio = smooth3(SinoRatio,'gaussian',[3 3 3],0.42466);
+%SinoRatio = smooth3(SinoRatio,'gaussian',[9 9 7],2);
+
+name = strcat('SSRB_ratio_SEG_',filenameT,'.raw');
 fid = fopen(name,'w');
 fwrite(fid,SinoRatio,'float32');
 fclose(fid);
 
 recon = 4.83559*OSEM_Recon(SinoRatio,filenameT);
-name = strcat('OSEM_ratio_SEG_',filenameT,'.raw');
+name = strcat('OSEM_ratio_SEG_smooth_',filenameT,'.raw');
 fid  = fopen(name, 'w');
 fwrite(fid,recon,'float32');
 fclose(fid);
