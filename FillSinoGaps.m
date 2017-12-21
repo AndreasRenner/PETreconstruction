@@ -10,7 +10,8 @@ Sino = zeros(Nbins,Nproj,Nslices,'double');
 Mask = zeros(Nbins,Nproj,Nslices,'double');
 %recon= zeros(Nbins,Nbins,Nslices,'double');
 
-SE = strel('disk',30);
+%SE = strel('disk',30);
+SE = strel('disk',5);
 
 fid1 = fopen(filename,'r');
 fid2 = fopen(maskname,'r');
@@ -18,7 +19,8 @@ for i=1:Nslices
   Sino2D = fread(fid1,[Nbins,Nproj],'float32');
   Mask2D = fread(fid2,[Nbins,Nproj],'float32');
   Mask2D = imdilate(Mask2D,SE);
-  Mask2D = imgaussfilt(Mask2D,10);
+  %Mask2D = imgaussfilt(Mask2D,10);
+  Mask2D = imgaussfilt(Mask2D,5);
   for j=1:Nproj
     for k=1:Nbins
       if Mask2D(k,j) && Sino2D(k,j)<=0
