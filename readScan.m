@@ -4,6 +4,7 @@ function [sinoTotal,maxIndex,tstart,tstop]=readScan(filename, ...
 
 acqTime01Blank1 = 80170;
 tpart = acqTime01Blank1/Nparts;
+emission = 1;
 
 % Estimate Number of Tags from Filesize
 file  = strcat(filename,'.bf');
@@ -96,22 +97,28 @@ for j=1:Nparts
     % calculate pixel2time faktor
     p2tfaktor = tpart/30; %line1ref(end);
     % get line1 and line2 of new scan
-    %[line1and2new] = sino2line(SSRBsino,j,j); %forBlank
-    [line1and2new] = sino2lineEM(SSRBsino,j,j);
-    line1new(:,1) = line1and2new(:,1);
-    line1new(:,2) = line1and2new(:,2);
-    line2new(:,1) = line1and2new(:,1);
-    line2new(:,2) = line1and2new(:,3);
-    %difstart  = calculatedif(line1ref,line1and2new(1,1,:));
-    %difstop   = calculatedif(line2ref,line1and2new(1,2,:));
-    difstart  = calculatedifEM(line1ref,line1new);
-    difstop   = calculatedifEM(line2ref,line2new);
+    if ~emission
+      [line1and2new] = sino2line(SSRBsino,j,j); %forBlank
+      difstart  = calculatedif(line1ref,line1and2new(1,1,:));
+      difstop   = calculatedif(line2ref,line1and2new(1,2,:));
+    else
+      [line1and2new] = sino2lineEM(SSRBsino,j,j);
+      line1new(:,1) = line1and2new(:,1);
+      line1new(:,2) = line1and2new(:,2);
+      line2new(:,1) = line1and2new(:,1);
+      line2new(:,2) = line1and2new(:,3);
+      difstart  = calculatedifEM(line1ref,line1new);
+      difstop   = calculatedifEM(line2ref,line2new);
+    end
     if abs(difstart-difstop)>20
       fprintf('Wrong line selected - I will try again\r');
-      difstart  = calculatedifEM(line2ref,line1new);
-      difstop   = calculatedifEM(line1ref,line2new);
-      %difstart  = calculatedif(line2ref,line1and2new(1,1,:));
-      %difstop   = calculatedif(line1ref,line1and2new(1,2,:));
+      if ~emission
+        difstart = calculatedif(line2ref,line1and2new(1,1,:));
+        difstop  = calculatedif(line1ref,line1and2new(1,2,:));
+      else
+        difstart = calculatedifEM(line2ref,line1new);
+        difstop  = calculatedifEM(line1ref,line2new);
+      end
     end
     clear line1new;
     clear line2new;
