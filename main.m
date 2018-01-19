@@ -691,32 +691,32 @@ toc
 BlankComplete = zeros(Nbins,Nproj,NSliTot);
 TransComplete = zeros(Nbins,Nproj,NSliTot);
 %EmissComplete = zeros(Nbins,Nproj,NSliTot);
-%MaskComplete  = zeros(Nbins,Nproj,NSliTot);
+MaskComplete  = zeros(Nbins,Nproj,NSliTot);
 
 for j=1:Nparts
   l = 1;
   sinoAddBlank(:,:,:) = sinoTotalB(j,:,:,:);
   sinoAddTrans(:,:,:) = sinoTotalT(j,:,:,:);
   %sinoAddEmiss(:,:,:) = sinoTotalE(j,:,:,:);
-  %sinoAddMask (:,:,:) = testMask  (j,:,:,:);
+  sinoAddMask (:,:,:) = testMask  (j,:,:,:);
   for i=(indexref(j)-6):(indexref(j)+6)
     if i>0 && i<=NSliTot
       BlankComplete(:,:,i)=BlankComplete(:,:,i)+sinoAddBlank(:,:,l);
       TransComplete(:,:,i)=TransComplete(:,:,i)+sinoAddTrans(:,:,l);
       %EmissComplete(:,:,i)=EmissComplete(:,:,i)+sinoAddEmiss(:,:,l);
-      %MaskComplete (:,:,i)=MaskComplete (:,:,i)+sinoAddMask (:,:,l);
+      MaskComplete (:,:,i)=MaskComplete (:,:,i)+sinoAddMask (:,:,l);
     end
     l = l+1;
   end
 end
 
-tic
+%tic
 %% perform median filtering of complete sinogram
-for i=1:NSliTot
-  BlankComplete(:,:,i) = medfilt2(BlankComplete(:,:,i),[3 3]);
-  TransComplete(:,:,i) = medfilt2(TransComplete(:,:,i),[3 3]);
-end
-toc
+%for i=1:NSliTot
+%  BlankComplete(:,:,i) = medfilt2(BlankComplete(:,:,i),[3 3]);
+%  TransComplete(:,:,i) = medfilt2(TransComplete(:,:,i),[3 3]);
+%end
+%toc
 
 %% inpaint nans to crystall gaps
 for i=1:NSliTot
@@ -820,7 +820,8 @@ fclose(fid);
 
 %% Reconstruction of RatioComplete
 %filenameMask  = 'SSRB_997ratio_mask_600_04TransPhantom2HOT.raw';
-filenameMask  = 'SSRB_mask_02TransPhantom2.raw';
+%filenameMask  = 'SSRB_mask_02TransPhantom2.raw';
+filenameMask  = 'SSRB_mask_03TransPhantom1.raw';
 SinoRatio = FillSinoGaps(name,filenameMask);
 SinoRatio = smooth3(SinoRatio,'gaussian',[3 3 3],0.42466);
 %SinoRatio = smooth3(SinoRatio,'gaussian',[9 9 7],2);
