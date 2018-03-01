@@ -1,4 +1,4 @@
-function SSRB_mMR_bigfiles(filename, fileending, Nscans, ScatterCor)
+function SSRB_mMR_bigfiles(filename,fileending,Nscans,ScatterCor)
 
 % Estimate Number of Tags from Filesize
 file  = strcat(filename, fileending);
@@ -8,11 +8,18 @@ fprintf('%s - Total Number of Tags: \t %10.0f\r',filename,Ncs);
 
 Npos  = Ncs/Nscans;
 %Nread = Npos;
-Nread = ceil(Npos*1.15); % for 04HOT
+%Nread = ceil(Npos*0.93);
+%Nread = ceil(Npos*1.1);  % for transPig2
+%Nread = ceil(Npos*1.11); % for blankPig2
+%Nread = ceil(Npos*1.2);  % for transPig1
+%Nread = ceil(Npos*1.14); % for blankPig1
+%Nread = ceil(Npos*1.2);  % for transHP
+Nread = ceil(Npos*1.14); % for blankHP
+%Nread = ceil(Npos*1.15); % for 04HOT
 %Nread = ceil(Npos*1.05); % for Trans
 %Nread = ceil(Npos*1.16); % for 01Blank 
 fprintf('Number of Tags per read: %u\r\n', Nread);
-%start = 0;
+start = 0;
 %
 % Values for 05BlankFast (2017-05-19)
 %start = 154938+118585+110162+155863+87207+124791; %97032+157230+96259
@@ -41,7 +48,7 @@ fprintf('Number of Tags per read: %u\r\n', Nread);
 %faktor=[0.9,1.5,1.42,0.82,0.75,1,1]; %0 = 0.9
 %scanDirection=0;
 % For Emission-Scan:
-start = 106048+112690+93222; % 317977
+%start = 106048+112690+93222; % 317977
 %faktor= 2*0.9 + 0.82; %0 = 1.15;
 %
 % Values for 01Blank (2017-08-11)
@@ -53,15 +60,81 @@ start = 106048+112690+93222; % 317977
 %   1063860,1174680,1286040,1403280,1505830,1611940,1712770];
 %faktor=[1.14,1.11,1.08,1.07,1.05,1.06,1.01,1.02,1,0.94,0.92,0.92,0.9,0.88,1];
 %scanDirection=1;
+%
+% Values for blankPig2 (2018-02-07)
+%start = 79735+102648+82798+69419+99641+82791+80860+68081+95917+ ...
+%    76789+81332+77737+69440+82514+86093+68218+85039+77650+69030+ ...
+%    78518+93441+92075;
+%tstart=[12990,102230,182650,265660,350020,434680,517280,598960, ...
+%    679510,762400,839430,920980, 998410,1082450,1159190,1236640, ...
+%    1313250,1390520,1467540,1545830,1624750,1708440];
+%tstop =[78610,168480,248270,332140,415790,500590,582610,665590, ...
+%    745580,829000,905500,987680,1066480,1149110,1225910,1303460, ...
+%    1379680,1457210,1534920,1613630,1690610,1775880];
+%faktor=[1.12,1.1,1.07,1.08,1.04,1.03,1.03,1.04,1,1,0.99,0.99,0.98, ...
+%    0.97,0.94,0.94,0.93,0.92,0.93,0.9,1,1];
+%scanDirection=0;
+%
+% Values for transPig2 (2018-02-07)
+%start = 137238+167157+114013+156948+139553+138200+137543+140376+ ...
+%    148679+133161+140618+246509;
+%tstart=[ 70090,211610,350830,492190,630130,772870,911860,1052350, ...
+%    1191050,1334250,1474950,1615950];
+%tstop =[136270,278160,417420,558950,696540,839900,978430,1119220, ...
+%    1256660,1401150,1540690,1682500];
+%faktor=[1.11,1.04,1.06,1.02,1,0.98,0.96,0.94,0.92,0.9,1,1];
+%scanDirection=0;
+%
+% Values for blankPig1 (2018-02-06)
+%start = 75468+90774+104388+68421+106921+67879+101581+85532+86058+ ...
+%    78595+81316+67406+93015+81387+80486+77879+67348+89667+77146+ ...
+%    85348+92752;
+%tstart=[ 8920, 99760,184280,271330,354880,446860,530660,616280, ...
+%    702450,787640,866290, 947420,1027420,1107580,1188850,1269330, ...
+%    1347920,1430910,1514810,1598750,1676270,incomplete];
+%tstop =[74390,165680,248960,337370,419060,513590,594880,684160, ...
+%    766600,854060,931980,1014250,1091610,1173860,1252880,1336140, ...
+%    1413470,1497660,1580330,1664910,1741250,incomplete];
+%faktor=[1.14,1.12,1.09,1.08,1.08,1.06,1.08,1.03,1.03,1.03,1,1,0.98, ...
+%    0.96,0.96,0.94,0.96,0.92,0.93,0.9,1,1];
+%scanDirection=0;
+%
+% Values for transPig1 (2018-02-06)
+%start = 164280+127646+217956+103474+169664+115390+124558;%+185704+ ...
+%    160555+70173+167843+192728;
+%tstart=[ 67920,222670,369760,519820,659710,802400, 947150,1091270, ...
+%    1229760,1371270,1511110,1655120];
+%tstop =[138520,290160,435040,584770,723360,869840,1015760,1157110, ...
+%    1294040,1437890,1576290,1722800];
+%faktor=[1.1,1.1,1,1,1,1,0.98,0.92,0.88,0.9,1,1];
+%scanDirection=0;
+%
+% Values for blankHP (2018-02-07)
+%start = ;
+%tstart=[];
+%tstop =[];
+%faktor=[];
+%scanDirection=0;
+%
+% Values for transHP (2018-02-07)
+%start = ;
+%tstart=[];
+%tstop =[];
+%faktor=[];
+%scanDirection=0;
+%
 
 fid   = fopen(file,'r');
 
-offset= uint64(2*ceil(Npos*0.9)+ceil(Npos*0.82))*4;%+ceil(Npos*1.5)+ceil(Npos*1.42)+ ...
-%               ceil(Npos*0.82))*4;%+ceil(Npos*1.07)+ceil(Npos*1.05)+ ...
-%               ceil(Npos*1.06)+ceil(Npos*1.01)+ceil(Npos*1.02)+ ...
-%               Npos+ceil(Npos*0.94)+2*ceil(Npos*092)+ ...
-%               ceil(Npos*0.9))*4;%+ceil(Npos*0.88))*4;
-fseek(fid,offset,'bof');
+%offset= uint64(2*ceil(Npos*1.14)+ceil(Npos*1.12)+ceil(Npos*1.09)+ ...
+%    3*ceil(Npos*1.08)+ceil(Npos*1.06)+3*ceil(Npos*1.03)+2*Npos+ ...
+%    ceil(Npos*0.98)+3*ceil(Npos*0.96)+ceil(Npos*0.94)+ ...
+%    ceil(Npos*0.92))*4;%+ ...
+%    ceil(Npos*1.07)+ceil(Npos*1.08)+ceil(Npos*1.04)+2*ceil(Npos*1.03)...
+%    +ceil(Npos*1.04)+2*Npos+2*ceil(Npos*0.99)+ceil(Npos*0.98)+ ...
+%    ceil(Npos*0.97)+2*ceil(Npos*0.94)+ceil(Npos*0.93)+ceil(Npos*0.92)+ ...
+%    ceil(Npos*0.93))*4; %...
+%fseek(fid,offset,'bof');
 
 for i=1:Nscans
   dlist = fread(fid,[Nread],'uint32');
@@ -83,10 +156,13 @@ for i=1:Nscans
     %prompt='1 -> highest peak first; 0 -> else: ';
     %scanDirection=input(prompt);
     %clear prompt;
-    % 01Blank starts with highest peak first
+    % 01Blank         starts with highest peak first
     % 02TransPhantom2 starts with highest peak first
     % 03TransPhantom1 starts with highest peak first
     % 04TransPhantom2HOT starts with low  peak first
+    % blankPig2          starts with low  peak first
+    % transPig2          starts with low  peak first
+    % transPig1          starts with low  peak first
     
     name = strcat('minlistScan',num2str(i),filename);
     try
@@ -159,16 +235,26 @@ for i=1:Nscans
     end
     
   else
-%    % Get acquisition time in ms and output frequency of Tags
-%    name = strcat('minlistScan',num2str(i),filename);
-%    minlist=zeros(1,21);
-%    for j=1:21
-%      fprintf('%u. Minimum - ',j);
-%      prompt='Enter time in ms:';
-%      minlist(j)=input(prompt);
-%    end
-%    clear prompt;
-%    save(name,'minlist');
+    % Get acquisition time in ms and output frequency of Tags
+    name = strcat('minlistScan',num2str(i),filename);
+    try
+      load(name);
+    catch ME
+      if (strcmp(ME.identifier,'MATLAB:load:couldNotReadFile'))
+        warning('Did not find >>minlistBlanc.mat<<. Enter Minima manually.');
+        % Get acquisition time in ms and output frequency of Tags
+        minlist=zeros(1,21);
+        for j=1:21
+          fprintf('%u. Minimum - ',j);
+          prompt='Enter time in ms:';
+          minlist(j)=input(prompt);
+        end
+        clear prompt;
+        save(name,'minlist');
+      else
+        rethrow(ME)
+      end
+    end
     %prompt = 'Enter start time in ms:';
     %tstart = input(prompt);
     %clear prompt;
@@ -176,22 +262,23 @@ for i=1:Nscans
     %tstop  = input(prompt);
     %clear prompt;
 
-    dlistcut  = cutlmdata(dlist,tstart(i),tstop(i));
-    clear dlist;
-
-    name = strcat(filename, num2str(i),'randomSubstracted');
-    % make Sino without random substraction
-    %sino = makeSinoBig(dlistcut);
-    % make Sino with random substraction
-    sino = makeSinoRandomSubstraction(dlistcut);
-    clear dlistcut;
-    SSRB_mMR(sino,name);
+%    dlistcut  = cutlmdata(dlist,tstart(i),tstop(i));
+%    clear dlist;
+%
+%    name = strcat(filename, num2str(i),'randomSubstracted');
+%    % make Sino without random substraction
+%    %sino = makeSinoBig(dlistcut);
+%    % make Sino with random substraction
+%    sino = makeSinoRandomSubstraction(dlistcut);
+%    clear dlistcut;
+%    SSRB_mMR(sino,name);
   end
   
-  %prompt = 'Enter Nread Faktor:';
-  %faktor = input(prompt);
+  prompt = 'Enter Nread Faktor:';
+  faktor = input(prompt);
   %Nread  = Npos;
-  Nread  = ceil(Npos*faktor(i));
+  Nread  = ceil(Npos*faktor);
+  %Nread  = ceil(Npos*faktor(i));
   
   start  = start+acqTime;
 end
